@@ -2,6 +2,16 @@
 
 本页区分选定的支持目标、尚未执行的检查与已取得的证据。历史 P0 决策见 [ADR 0001](../architecture/0001-p0-baseline.md)，安全限制见[安全边界](../architecture/security.md)，阶段范围见 [SKILL.md](../../SKILL.md)。配置 CI、通过 mock 或外部项目声明均不等于真实平台或 SnowLuma 兼容验证。
 
+## GitHub 0.1.0发行原生CI记录
+
+源码已以MIT公开推送main；v0.1.0 Release由[发行页面](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.0)实际状态确认，不将draft写成已正式发布。发行附件仅Linux x86_64。本次全绿[run40901049665](https://github.com/Eetherrr/TwinTail/actions/runs/40901049665)对应head `ad3296b09790e3ea497aac39b41957b66aabf3cd`，以下记录独立于P0–P6历史：
+
+- Linux x64 job123543100297与Linux arm64 job123543100623分别Rust成功184项；默认2项ignored另由显式CLI补跑。各自Python release19/state16通过，后续drift、rustdoc、空host、schema检查通过。
+- Windows x64 MSVC job123543100415：Rust157项通过、0失败、0ignored，Python release19通过；后续drift、rustdoc、空host、schema检查通过。Unix state与Linux CLI在Windows跳过，不能将它们列为Windows已执行。
+- Web：24项Vitest、4项mock浏览器交互、typecheck/build/asset drift通过，2项live测试跳过；历史本地live结果仍保留于P5记录，不冒充此次远端执行。
+
+这证明列出的native构建/测试范围，不是所有产品行为或长时间运行认证。真实SnowLuma仍仅P4指定部署的正向私聊/重连，reverse未取得真实产品证据。当前矩阵见[平台验证](../release/platforms.md)。
+
 ## P6发布加固（Linux本地候选）
 
 用户已授权新建公开GitHub仓库、main分支及MIT下0.1.0发行准备；根许可与元数据由lead同步。本页不将授权写成公开推送或Release已完成，实际发行证据另行记录。发行/状态/合同与soak命令已落盘，见发行指南；最终验证计数不沿用P5历史。状态负责人报告Python3.13.5下16项stdlib unittest、py_compile及真实CLI snapshot/verify/restore/重复restore拒绝通过；最低Python3.11本机未运行，CI等待runner。
@@ -89,30 +99,11 @@ Linux x86_64；rustc 1.99.1 (58cf8f9c3 2026-10-13)、cargo 1.99.1 (5f94df478 202
 | 路径 | `--data-dir` 默认 `./data`，`--install-dir` 默认 `./packages`；相对 cwd | P0 仅解析显示，不读写、不创建目录、不解析配置 |
 | 插件 / IPC / WebUI | 不在 P0 实现范围 | 无可用接口或兼容性承诺 |
 
-## 平台与 CI 矩阵
+## 当前平台与 CI 矩阵
 
-以下 CI 为计划检查项，实际远端运行结果尚待取得。不得将当前开发机的检查结果记成 Windows 或其他架构已通过。
+当前平台执行范围以本页新增GitHub发行记录和[平台验证矩阵](../release/platforms.md)为准：Linux x64、Linux arm64与Windows x64 MSVC已取得native CI证据；state与Linux CLI仅在Linux执行。信号行为、真实SnowLuma与发行附件须分别核对，不能从一般测试通过推断所有部署行为。
 
-| 平台目标 | fmt / clippy / test / doc / `--check` | 信号行为 | 状态 |
-| --- | --- | --- | --- |
-| Linux x64 | 计划在 Linux CI runner 执行，Rust `1.99.1` | Ctrl-C、SIGTERM 需要生命周期验证 | 平台 CI 待执行 |
-| Windows x64 | 计划在 Windows CI runner 执行，Rust `1.99.1` | Ctrl-C 需要平台验证；Unix SIGTERM 不适用 | 平台 CI 待执行 |
-| Linux arm64 | P6 发布目标；尚无本阶段验证结论 | 后续在目标环境验证 | 未验证 |
-| 其他平台或架构 | 当前未列入已验证范围 | 未验证 | 未验证 |
-
-计划检查命令：
-
-```sh
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cargo doc --workspace --no-deps
-cargo run -p twintail-host --bin twintail-host -- --check
-```
-
-`cargo doc` 配合 `RUSTDOCFLAGS=-D warnings`；在不同 shell 中使用相应环境变量设置方式。CI 不需要真实 QQ 账号或 SnowLuma 凭据。`--help`、`--version`、默认驻留与信号退出、包含空格的路径等行为应通过对应测试或运行记录核对，不因编译成功而视为已经验证。
-
-未来把状态改成“通过”时，记录提交、runner/操作系统及架构、Rust 版本、命令和 CI 运行链接或可复现日志。单次通过只覆盖该记录所列环境，不能自动扩展到其他架构、终端或系统版本。
+以下P0工具链记录及各P0–P6段落保留当时实际执行范围，不因后续native CI而改写历史。
 
 ## 2026-10-28 本地 P0 验证
 

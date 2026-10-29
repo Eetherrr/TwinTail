@@ -6,7 +6,7 @@
 
 P0–P5 已完成 Linux 本地验收：包含 Rust SDK、独立进程插件管理与配置、排他热重载、事件/动作/服务路由、SnowLuma 适配器及 Vue WebUI。无 QQ 账号可按 [SDK quickstart](docs/plugin-api/quickstart.md) 运行 echo/mock 闭环。
 
-P6 增加反向 Universal WebSocket、候选打包与校验、冷备份恢复、插件契约和有界负载工具。Linux 候选及实际验证范围见[发行指南](docs/release/README.md)与[兼容性记录](docs/compatibility/README.md)。指定真实 SnowLuma 部署的正向私聊/重连已验证；反向接入目前只有本地 mock 证据。split/HTTP 传输、Windows/arm64 目标运行仍待验证。项目采用 [MIT 许可证](LICENSE)，GitHub 发行已获授权，候选工作流不会自动发布。架构和阶段门槛见 [SKILL.md](SKILL.md)。
+P6 增加反向 Universal WebSocket、候选打包与校验、冷备份恢复、插件契约和有界负载工具。Linux 候选及实际验证范围见[发行指南](docs/release/README.md)与[兼容性记录](docs/compatibility/README.md)。指定真实 SnowLuma 部署的正向私聊/重连已验证；反向接入目前只有本地 mock 证据。split/HTTP 传输仍延期。Linux x64、Linux arm64 与Windows x64 MSVC已通过本次GitHub native CI，运行范围见[平台矩阵](docs/release/platforms.md)；发行附件目前仅Linux x64。项目采用 [MIT 许可证](LICENSE)，源码main已公开；v0.1.0 Release状态以[发行页面](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.0)为准，候选工作流不会自动发布。架构和阶段门槛见 [SKILL.md](SKILL.md)。
 
 ## 开始运行
 

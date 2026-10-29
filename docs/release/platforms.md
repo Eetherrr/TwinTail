@@ -1,13 +1,15 @@
 # 平台验证矩阵
 
-P6 Linux本地候选完成。本表分别记录实现、交叉检查和运行证据；未测项不从其他平台外推，各项证据分别如下，最终归档与解包校验报告为dist/release-validation.json。
+当前GitHub native CI已通过：[run40901049665](https://github.com/Eetherrr/TwinTail/actions/runs/40901049665)，源码head `ad3296b09790e3ea497aac39b41957b66aabf3cd`。以下是本次运行范围，P0–P6历史本地证据仍见兼容记录；CI通过不扩大真实SnowLuma验证或发行附件范围。
 
-| 客户端目标 | 实现/构建状态 | 已有运行证据 | P6新增发行/恢复/合同/soak |
-| --- | --- | --- | --- |
-| Linux x64 GNU | release目标linux-x86_64（x86_64-unknown-linux-gnu）已实现 | P5本地Rust/CLI/Chromium已验收；P4指定真实部署见专项记录 | 真实五binary release构建、state16/release18测试及60秒payload soak通过；adapter19项、最终174项默认测试+1 doctest及strict checks通过；端口测试修复生产不变，最终制品报告单独记录 |
-| Linux arm64 GNU | release目标linux-aarch64（aarch64-unknown-linux-gnu）布局已实现 | 未运行 | 实际目标构建/运行待验，不标支持通过 |
-| Windows x64 MSVC | release目标windows-x86_64（x86_64-pc-windows-msvc）与.exe清单重写已实现 | 未运行 | 实际MSVC构建/运行待验；state工具明确不支持Windows |
-| Windows x64 GNU（历史检查） | 管理命名管道和平台代码已实现，P5全目标严格Clippy交叉检查通过 | 未运行；原生HTTP握手诊断不是完整宿主/adapter运行验收 | 不等同MSVC发行构建或目标运行 |
+| 目标 | 本次native执行证据 | 限制 |
+| --- | --- | --- |
+| Linux x64 GNU | job123543100297，Rust成功184项（默认2项ignored由显式CLI补跑），Python release19/state16；后续drift/doc/空host/schema检查通过 | v0.1.0附件仅此平台；60秒soak与真实SnowLuma另按本地专项记录 |
+| Linux arm64 GNU | job123543100623，Rust成功184项（默认2项ignored由显式CLI补跑），Python release19/state16；后续drift/doc/空host/schema检查通过 | 已有native测试，不表示提供arm64发行附件或真实SnowLuma部署验证 |
+| Windows x64 MSVC | job123543100415，Rust157项通过、0失败、0ignored，Python release19；后续drift/doc/空host/schema检查通过 | state工具与Linux CLI在此平台跳过；无Windows发行附件，不代表真实SnowLuma运行 |
+| Windows x64 GNU（历史交叉检查） | P5/P6全目标严格Clippy交叉检查通过 | 与本次MSVC native证据分别记录 |
+
+同次Web检查：24项Vitest、4项mock浏览器交互、typecheck/build与asset drift通过；2项live浏览器测试跳过。本次不将历史本地live通过当作远端执行。源码main已公开，v0.1.0发行是否发布以[Release页面](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.0)实际状态为准。候选同输入归档与解包报告仍见dist/release-validation.json。
 
 Linux本地证据为开发机x64，真实SnowLuma验证客户端为WSL mirrored。远端报告2.2.1-node，服务OS/commit/SHA未知，Windows ServerBox仅SSH转发。不得把远端OS列为Windows或据此宣称reverse/其他动作已验。
 

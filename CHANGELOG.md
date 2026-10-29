@@ -8,6 +8,8 @@
 
 ### 发行准备
 
+- 公开仓库 https://github.com/Eetherrr/TwinTail 以 main 为默认分支；原生平台 CI [40901049665](https://github.com/Eetherrr/TwinTail/actions/runs/40901049665)（ad3296b09790e3ea497aac39b41957b66aabf3cd）四任务全部通过：Linux x64/arm64 各184项Rust（含显式CLI smoke）、release19/state16；Windows MSVC157项Rust、release19及独立文档/空宿主/生成合同检查；Web24项单元、4项模拟浏览器、类型/构建/资源漂移检查。两项真实宿主浏览器测试在CI按配置跳过，原本地验收记录保留。v0.1.0 附件仅提供 Linux x86_64，实际公开状态及摘要由 GitHub Release 记录。
+
 - 经项目方授权采用 MIT，新增 LICENSE、workspace/全部 Rust 包与前端 license 元数据，以及第三方依赖许可正文与再分发声明；GitHub 新建公开仓库，以 main 分支发行。
 - 发行前审查待提交库存、秘密与隐私数据、生成物及 .gitignore，补充嵌套构建目录、环境文件、运行日志/socket/PID、编辑器和 Python 缓存排除规则；保留 Cargo.lock、前端锁文件、协议 Schema 和正式内嵌 Web 资源。
 - 更新发行工具与文档，移除许可证未决标记，重新生成带 MIT 和第三方许可正文的发行归档。目标平台/真实 SnowLuma reverse 验证范围保持原证据边界。

@@ -1,6 +1,6 @@
 # GitHub 0.1.0发行准备
 
-P6 Linux本地候选完成；用户已授权新建公开GitHub仓库、使用main分支并以MIT准备0.1.0发行。授权不代表仓库已推送或GitHub Release已发布，实际结果以发行操作证据为准；cargo publish不属于本次GitHub发行流程。工具命令已按实际接口核对，最终运行结果由lead统一验收。
+P6 Linux本地候选完成；用户已授权新建公开GitHub仓库、使用main分支并以MIT准备0.1.0发行。源码main已公开推送；v0.1.0 GitHub Release状态以[发行页面](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.0)为准，draft不等同正式发布；cargo publish不属于本次GitHub发行流程。工具命令已按实际接口核对，最终运行结果由lead统一验收。
 
 | 文档 | 使用场景 |
 | --- | --- |
