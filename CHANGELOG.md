@@ -14,6 +14,11 @@
 - 第三方许可清单覆盖 Cargo.lock 全部 206 个第三方版本及 Web 25 个生产安装路径；补齐 12 项离线缓存缺口，10 个 Windows 精确版本归档均核对锁文件 SHA256，uuid-simd/vsimd MIT 原文按发布包 VCS commit 固定来源取回。所有清单条目均含正文，保留 Unicode、ring、TypeScript 等额外声明。
 - MIT 元数据 9/9 workspace packages、发行工具 19 tests、格式与忽略规则检查通过；首次公开候选扫描未发现真实秘密或 QQ 数据，合成 fixture 保留；正式 Git 提交使用 GitHub noreply 邮箱。
 
+### Fixed
+
+- 首次 GitHub Linux x64/arm64 CI 暴露停止握手测试的同步竞态：mock 先确认完整 HTTP Upgrade 请求再取消，保留原 250ms 取消/EOF 门槛和 Drop 关闭检查。
+- 修复原生 Windows 构建 Web 内嵌资源时误拒绝目录分隔符；按安全 UTF-8 路径组件生成 URL，拒绝绝对路径、parent、非法前缀等，并增加 Linux/Windows 原生路径回归测试。
+
 ### P6 Added
 
 - 新增 ADR 0007 与发行、运维、平台、插件合同及迁移指南；保持 wire 1.2、包版本 0.1.0 和 config_version 1，旧正向配置省略 transport 仍兼容。

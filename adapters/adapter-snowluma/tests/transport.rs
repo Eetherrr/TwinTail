@@ -475,17 +475,44 @@ async fn stop_preempts_stalled_handshake_and_drop_closes_connected_socket() {
     );
     let (transport, _events) = Transport::spawn(cfg, bot()).unwrap();
     let (mut stalled, _) = listener.accept().await.unwrap();
+    use tokio::io::AsyncReadExt;
+    // TCP acceptance does not prove connect_async has written its HTTP request.
+    // Observe the complete Upgrade request before cancelling, while deliberately
+    // withholding the response so the actor is known to be inside its handshake.
+    let mut request = Vec::new();
+    timeout(Duration::from_secs(1), async {
+        let mut chunk = [0u8; 1024];
+        while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+            let count = stalled.read(&mut chunk).await.unwrap();
+            assert_ne!(count, 0, "adapter closed before sending Upgrade request");
+            request.extend_from_slice(&chunk[..count]);
+            assert!(
+                request.len() <= 8192,
+                "Upgrade request exceeds fixture bound"
+            );
+        }
+    })
+    .await
+    .expect("mock must observe the Upgrade request before stop");
+    assert!(request.starts_with(b"GET /onebot HTTP/1.1\r\n"));
+    assert!(
+        request
+            .windows(b"Upgrade: websocket".len())
+            .any(|bytes| bytes.eq_ignore_ascii_case(b"Upgrade: websocket"))
+    );
     timeout(Duration::from_millis(250), transport.stop())
         .await
         .unwrap();
     assert_eq!(transport.status().phase, "stopped");
-    use tokio::io::AsyncReadExt;
-    let mut bytes = Vec::new();
-    timeout(Duration::from_millis(250), stalled.read_to_end(&mut bytes))
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(!bytes.is_empty());
+    let mut trailing = Vec::new();
+    timeout(
+        Duration::from_millis(250),
+        stalled.read_to_end(&mut trailing),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(trailing.is_empty(), "no request should be sent after stop");
     let cfg = config(listener.local_addr().unwrap(), json!({}));
     let server = tokio::spawn(async move {
         let (stream, _) = listener.accept().await.unwrap();
