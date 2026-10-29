@@ -1,0 +1,66 @@
+name: Release candidate (no publishing)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    name: Candidate / ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+            triple: x86_64-unknown-linux-gnu
+            extension: tar.gz
+          - os: ubuntu-24.04-arm
+            target: linux-aarch64
+            triple: aarch64-unknown-linux-gnu
+            extension: tar.gz
+          - os: windows-latest
+            target: windows-x86_64
+            triple: x86_64-pc-windows-msvc
+            extension: zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.node-version
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Pin npm
+        run: npm install --global npm@12.2.1
+      - name: Build and check frontend
+        working-directory: web
+        run: |
+          npm ci
+          npm test -- --run
+          npm run build
+      - name: Check packaged assets match source
+        run: git diff --exit-code -- plugins/web-admin/assets
+      - name: Show pinned toolchain
+        run: rustup show active-toolchain
+      - name: Build target binaries
+        run: python tools/release/release.py build --target ${{ matrix.target }}
+      - name: Native runtime tests
+        run: cargo test --workspace --locked
+      - name: Stage clean candidate
+        run: python tools/release/release.py stage --target ${{ matrix.target }} --binaries target/${{ matrix.triple }}/release --output candidate
+      - name: Archive candidate
+        run: python tools/release/release.py archive --stage candidate --output twintail-${{ matrix.target }}.${{ matrix.extension }}
+      - name: Verify archive
+        run: python tools/release/release.py verify twintail-${{ matrix.target }}.${{ matrix.extension }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: twintail-candidate-${{ matrix.target }}
+          path: twintail-${{ matrix.target }}.${{ matrix.extension }}
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,86 @@
+name: Rust CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Rust 1.99.1 / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TERM_COLOR: always
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned toolchain
+        run: rustup show active-toolchain
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Release tooling tests
+        run: python -m unittest discover -s tools/release -p "test_*.py"
+      - name: Cold state tooling tests
+        if: runner.os == 'Linux'
+        run: python -m unittest discover -s tools/state -p "test_*.py"
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Build host and plugin examples
+        run: cargo build -p twintail-host -p echo-plugin -p mock-adapter -p adapter-snowluma -p web-admin --locked
+      - name: Tests
+        run: cargo test --workspace --locked
+      - name: Linux adapter CLI smoke
+        if: runner.os == 'Linux'
+        run: TWINTAIL_HOST_BIN="$GITHUB_WORKSPACE/target/debug/twintail-host" cargo test -p adapter-snowluma --test cli_p4 --locked -- --ignored
+      - name: Linux Web management CLI smoke
+        if: runner.os == 'Linux'
+        run: TWINTAIL_HOST_BIN="$GITHUB_WORKSPACE/target/debug/twintail-host" cargo test -p web-admin --test cli_p5 --locked -- --ignored
+      - name: Web API contract drift
+        run: cargo run -p web-admin --example export_openapi --locked -- --check
+      - name: Documentation
+        run: cargo doc --workspace --no-deps --locked
+      - name: Empty host startup
+        run: cargo run -p twintail-host --locked -- --check
+      - name: Protocol schema drift
+        run: cargo run -p twintail-protocol --example export_schema --locked -- --check
+      - name: Manifest schema drift
+        run: cargo run -p twintail-core --example export_manifest_schema --locked -- --check
+
+  web:
+    name: WebUI / Node 26.7.0
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.node-version
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install pinned npm
+        run: npm install --global npm@12.2.1
+      - name: Locked dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Interaction tests
+        run: npm test -- --run
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: Browser interactions
+        run: npm run test:browser
+      - name: Production build
+        run: npm run build
+      - name: Packaged assets drift
+        run: git diff --exit-code -- ../plugins/web-admin/assets

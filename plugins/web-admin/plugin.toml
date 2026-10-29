@@ -1,0 +1,15 @@
+# Install the built web-admin executable with this manifest and schema.
+# Host plan must explicitly grant management.read and optionally management.write.
+# Browser authentication does not add host capabilities. Use only environment secret refs
+# for admin_token in config.toml; a literal is rejected by browser configuration reads.
+id = "web-admin"
+name = "TwinTail loopback web administration"
+version = "0.1.0"
+protocol_version = 1
+host_api = "^0.1.0"
+entrypoint = "web-admin"
+capabilities = ["management.read", "management.write"]
+required_capabilities = ["management.read"]
+config_schema = "config.schema.json"
+config_version = 1
+reload_policy = "exclusive"

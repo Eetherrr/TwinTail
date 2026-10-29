@@ -1,0 +1,13 @@
+# Copy the release executable into this package directory before loading.
+# Host grants must explicitly allow every required capability below.
+id = "echo-plugin"
+name = "echo-plugin"
+version = "0.1.0"
+protocol_version = 1
+host_api = "^0.1.0"
+entrypoint = "echo-plugin"
+capabilities = ["events.subscribe", "actions.call"]
+required_capabilities = ["events.subscribe", "actions.call"]
+
+[dependencies]
+adapter-snowluma = "^0.1.0"

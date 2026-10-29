@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TwinTail loopback web administrator configuration",
+  "description": "Startup-only configuration. Every change requires exclusive reload. Use an environment secret reference for admin_token in stored config, never a literal; validation here operates on host-resolved values.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["admin_token"],
+  "properties": {
+    "bind": {"type": "string", "default": "127.0.0.1:17280", "description": "Numeric loopback SocketAddr only. Non-loopback and invalid addresses are rejected before bind."},
+    "admin_token": {"type": "string", "minLength": 32, "maxLength": 256, "pattern": "^[!-~]+$", "writeOnly": true, "description": "Generate a random 32+ character secret. Configure using a host secret reference. Not returned by HTTP; changing requires restart and invalidates every browser session."},
+    "session_ttl_secs": {"type": "integer", "minimum": 60, "maximum": 86400, "default": 3600},
+    "max_sessions": {"type": "integer", "minimum": 1, "maximum": 256, "default": 32},
+    "max_concurrent_requests": {"type": "integer", "minimum": 1, "maximum": 128, "default": 16},
+    "max_connections": {"type": "integer", "minimum": 1, "maximum": 512, "default": 64},
+    "request_timeout_ms": {"type": "integer", "minimum": 100, "maximum": 30000, "default": 10000},
+    "max_body_bytes": {"type": "integer", "minimum": 1024, "maximum": 1048576, "default": 65536}
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ServiceCall",
+  "description": "Resolve a provider's current registration once, then bind the call to that generation.",
+  "type": "object",
+  "properties": {
+    "method": {
+      "description": "Service-specific method name.",
+      "type": "string"
+    },
+    "params": {
+      "description": "Service-specific arguments."
+    },
+    "provider": {
+      "description": "Stable provider plugin ID.",
+      "type": "string"
+    },
+    "service": {
+      "description": "Registered service name.",
+      "type": "string"
+    },
+    "version_req": {
+      "description": "Required SemVer interface range.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "provider",
+    "service",
+    "version_req",
+    "method",
+    "params"
+  ]
+}

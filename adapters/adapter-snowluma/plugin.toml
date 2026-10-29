@@ -1,0 +1,13 @@
+# Copy the built executable into the package before installing.
+# Host grants must explicitly include each required capability below.
+id = "adapter-snowluma"
+name = "SnowLuma OneBot v11 Universal WebSocket"
+version = "0.1.0"
+protocol_version = 1
+host_api = "^0.1.0"
+entrypoint = "adapter-snowluma"
+capabilities = ["bots.register", "events.publish", "services.provide"]
+required_capabilities = ["bots.register", "events.publish", "services.provide"]
+config_schema = "config.schema.json"
+config_version = 1
+reload_policy = "exclusive"

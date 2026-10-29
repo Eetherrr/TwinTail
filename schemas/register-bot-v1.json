@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RegisterBot",
+  "description": "Register an account under the authenticated adapter instance.",
+  "type": "object",
+  "properties": {
+    "self_id": {
+      "description": "Protocol account identifier.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "self_id"
+  ]
+}

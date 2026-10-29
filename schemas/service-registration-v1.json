@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ServiceRegistration",
+  "description": "Register a named service under the authenticated provider instance.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "description": "Exact service name, scoped to the provider plugin.",
+      "type": "string"
+    },
+    "version": {
+      "description": "SemVer interface version.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "version"
+  ]
+}

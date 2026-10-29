@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Subscribe",
+  "description": "Replace the caller's exact event-type subscription set.",
+  "type": "object",
+  "properties": {
+    "event_types": {
+      "description": "Exact event types; an empty list unsubscribes. No wildcard expansion.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "event_types"
+  ]
+}

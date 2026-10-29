@@ -1,0 +1,37 @@
+{
+  "name": "twintail-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=26.7.0 <27",
+    "npm": ">=12.2.1 <13"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "build": "npm run typecheck && vite build && node scripts/bundle.mjs",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "vue": "3.5.44"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "24.10.0",
+    "@vitejs/plugin-vue": "6.0.10",
+    "@vue/test-utils": "2.4.6",
+    "jsdom": "27.0.1",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vitest": "5.0.5",
+    "vue-tsc": "3.1.1"
+  },
+  "packageManager": "npm@12.2.1",
+  "allowScripts": {
+    "esbuild": true
+  },
+  "license": "MIT"
+}

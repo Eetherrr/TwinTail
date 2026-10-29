@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Manifest",
+  "description": "Version-one plugin package manifest, stored as `plugin.toml`.\n\nUnknown optional fields are ignored. All dependencies are strong dependencies;\nan absent or incompatible provider prevents loading the complete plan.",
+  "type": "object",
+  "properties": {
+    "args": {
+      "description": "Literal process arguments; never interpreted by a shell.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "capabilities": {
+      "description": "Requested capabilities; requesting alone never grants access.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "config_schema": {
+      "description": "Optional JSON Schema path relative to this package.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "config_version": {
+      "description": "Configuration format version; omitted versions retain version one.",
+      "type": "integer",
+      "format": "uint32",
+      "default": 1,
+      "minimum": 0
+    },
+    "dependencies": {
+      "description": "Provider plugin IDs mapped to mandatory SemVer requirements.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {}
+    },
+    "entrypoint": {
+      "description": "Relative executable path inside the package; no parent components.",
+      "type": "string"
+    },
+    "host_api": {
+      "description": "SemVer requirement that must match host API `0.1.0`.",
+      "type": "string"
+    },
+    "id": {
+      "description": "Stable lowercase identity matching `^[a-z][a-z0-9._-]*$`.",
+      "type": "string"
+    },
+    "name": {
+      "description": "Human-readable plugin name.",
+      "type": "string"
+    },
+    "protocol_version": {
+      "description": "IPC protocol major version; currently exactly one.",
+      "type": "integer",
+      "format": "uint16",
+      "maximum": 65535,
+      "minimum": 0
+    },
+    "reload_policy": {
+      "description": "Replacement policy. Only `exclusive` is implemented.",
+      "type": "string",
+      "default": "exclusive"
+    },
+    "required_capabilities": {
+      "description": "Requested capabilities that must also be granted before loading.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "target": {
+      "description": "Certified OS/architecture pair. Omission preserves legacy, uncertified packages.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "version": {
+      "description": "Package version, using SemVer syntax.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "version",
+    "protocol_version",
+    "host_api",
+    "entrypoint"
+  ]
+}

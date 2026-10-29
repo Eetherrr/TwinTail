@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HostConfig",
+  "description": "Static host configuration. An empty configuration enables no plugins.",
+  "type": "object",
+  "properties": {
+    "plugins": {
+      "description": "Packages explicitly enabled by the host administrator.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PluginEntry"
+      }
+    }
+  },
+  "$defs": {
+    "PluginEntry": {
+      "description": "One explicitly enabled package and its administrator-selected capabilities.",
+      "type": "object",
+      "properties": {
+        "grants": {
+          "description": "Exact capability names; omitted grants deny all capabilities.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "path": {
+          "description": "Package directory relative to the canonical installation root.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  }
+}

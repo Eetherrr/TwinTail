@@ -1,0 +1,1 @@
+{"status":"failed","retcode":1404,"data":{"reason":"synthetic missing target","retryable":false,"vendor_id":184467440737095516170},"echo":"opaque-generation-4-call-7","message":"synthetic failure","wording":"fixture only","vendor_error":{"category":"not_found"}}

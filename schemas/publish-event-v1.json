@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PublishEvent",
+  "description": "Publish an event for a previously registered account.",
+  "type": "object",
+  "properties": {
+    "event_type": {
+      "description": "Event type used for subscription matching.",
+      "type": "string"
+    },
+    "payload": {
+      "description": "Arbitrary protocol payload; message segments and unknown fields survive."
+    },
+    "protocol": {
+      "description": "Protocol namespace, for example `mock.v1`.",
+      "type": "string"
+    },
+    "self_id": {
+      "description": "Account registered by this process instance.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "self_id",
+    "protocol",
+    "event_type",
+    "payload"
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ConfigSnapshot",
+  "description": "An immutable configuration revision supplied by the host.\n\nValues may contain sensitive data or secret references. Consumers must never\nwrite full snapshots into diagnostics, logs or externally visible errors.",
+  "type": "object",
+  "properties": {
+    "config_version": {
+      "description": "Plugin-defined schema/migration version; independent of package version.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "revision": {
+      "description": "Host-assigned monotonically increasing revision.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "values": {
+      "description": "Configuration object validated by the host before delivery."
+    }
+  },
+  "required": [
+    "config_version",
+    "revision",
+    "values"
+  ]
+}

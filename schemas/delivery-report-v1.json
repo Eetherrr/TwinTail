@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DeliveryReport",
+  "description": "Admission counts for a best-effort fan-out; admission does not imply handler completion.",
+  "type": "object",
+  "properties": {
+    "delivered": {
+      "description": "Number admitted to bounded subscriber queues.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "dropped": {
+      "description": "Number rejected because a matching subscriber could not accept delivery.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "delivered",
+    "dropped"
+  ]
+}

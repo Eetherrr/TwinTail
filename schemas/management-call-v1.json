@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ManagementCall",
+  "description": "A safe management method invoked through `management.call`.\n\nThe host authenticates the source pipe and applies exact `management.read`\nor `management.write` grants. Unknown methods and arbitrary plugin RPC calls\nare rejected. Mutations return operation admission acknowledgements; callers\nquery operations for completion, especially when changing their own plugin.",
+  "type": "object",
+  "properties": {
+    "method": {
+      "description": "Exact allowlisted host management method.",
+      "type": "string"
+    },
+    "payload": {
+      "description": "Method-specific JSON object. Configuration reads contain secret references,\nnever resolved values. No source identity supplied here is trusted."
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "method",
+    "payload"
+  ]
+}

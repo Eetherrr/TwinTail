@@ -1,0 +1,10 @@
+# Copy the release executable into this package directory before loading.
+# Host grants must explicitly allow every required capability below.
+id = "mock-adapter"
+name = "mock-adapter"
+version = "0.1.0"
+protocol_version = 1
+host_api = "^0.1.0"
+entrypoint = "mock-adapter"
+capabilities = ["bots.register", "events.publish", "services.provide"]
+required_capabilities = ["bots.register", "events.publish", "services.provide"]

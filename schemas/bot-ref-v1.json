@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BotRef",
+  "description": "An account attached to one host-assigned adapter instance (including its generation).",
+  "type": "object",
+  "properties": {
+    "adapter_instance_id": {
+      "description": "Host-assigned adapter instance ID; never a plugin-selected routing identity.",
+      "type": "string"
+    },
+    "self_id": {
+      "description": "Protocol account identifier represented as a string without precision loss.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "adapter_instance_id",
+    "self_id"
+  ]
+}

@@ -1,0 +1,15 @@
+[package]
+name = "echo-plugin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+twintail-plugin-sdk = { path = "../../crates/twintail-plugin-sdk" }
+serde_json = "1"
+tokio.workspace = true
+
+[lints]
+workspace = true

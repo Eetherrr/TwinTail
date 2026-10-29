@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Message",
+  "description": "A versioned message whose body fields appear at the envelope's top level.",
+  "type": "object",
+  "properties": {
+    "protocol_version": {
+      "description": "Sender's protocol version, to be checked by the receiving peer.",
+      "$ref": "#/$defs/ProtocolVersion"
+    }
+  },
+  "oneOf": [
+    {
+      "description": "An invocation requiring a response with the same request ID.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "request"
+        },
+        "method": {
+          "description": "Invoked method name.",
+          "type": "string"
+        },
+        "payload": {
+          "description": "Method-specific JSON arguments."
+        },
+        "request_id": {
+          "description": "Connection-local correlation ID.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "request_id",
+        "method",
+        "payload"
+      ]
+    },
+    {
+      "description": "Completion of a previous request.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "response"
+        },
+        "outcome": {
+          "description": "Exactly one success value or structured error.",
+          "$ref": "#/$defs/Outcome"
+        },
+        "request_id": {
+          "description": "Correlation ID copied from the request.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "request_id",
+        "outcome"
+      ]
+    },
+    {
+      "description": "A notification that does not require a response.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "event"
+        },
+        "method": {
+          "description": "Event method name.",
+          "type": "string"
+        },
+        "payload": {
+          "description": "Event-specific JSON data."
+        }
+      },
+      "required": [
+        "kind",
+        "method",
+        "payload"
+      ]
+    },
+    {
+      "description": "A lifecycle or connection-control notification.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "control"
+        },
+        "method": {
+          "description": "Control method name.",
+          "type": "string"
+        },
+        "payload": {
+          "description": "Control-specific JSON data."
+        }
+      },
+      "required": [
+        "kind",
+        "method",
+        "payload"
+      ]
+    }
+  ],
+  "required": [
+    "protocol_version"
+  ],
+  "$defs": {
+    "ErrorCode": {
+      "description": "Stable, snake-case wire error categories.",
+      "oneOf": [
+        {
+          "description": "Peers have incompatible protocol versions.",
+          "type": "string",
+          "const": "incompatible_version"
+        },
+        {
+          "description": "The caller lacks an explicitly granted capability.",
+          "type": "string",
+          "const": "permission_denied"
+        },
+        {
+          "description": "The requested target is offline.",
+          "type": "string",
+          "const": "offline"
+        },
+        {
+          "description": "The operation's deadline elapsed; side effects may already have occurred.",
+          "type": "string",
+          "const": "timeout"
+        },
+        {
+          "description": "A forwarded operation may have executed before its result was lost; never retry automatically.",
+          "type": "string",
+          "const": "unknown_outcome"
+        },
+        {
+          "description": "The operation was cancelled.",
+          "type": "string",
+          "const": "cancelled"
+        },
+        {
+          "description": "A bounded queue or concurrency budget is exhausted.",
+          "type": "string",
+          "const": "overloaded"
+        },
+        {
+          "description": "Configuration validation failed.",
+          "type": "string",
+          "const": "invalid_config"
+        },
+        {
+          "description": "The serving plugin process exited.",
+          "type": "string",
+          "const": "plugin_exited"
+        },
+        {
+          "description": "A plugin replacement failed.",
+          "type": "string",
+          "const": "reload_failed"
+        },
+        {
+          "description": "An upstream service returned an error.",
+          "type": "string",
+          "const": "remote_error"
+        },
+        {
+          "description": "The transport frame is invalid.",
+          "type": "string",
+          "const": "invalid_frame"
+        },
+        {
+          "description": "The request is malformed or semantically invalid.",
+          "type": "string",
+          "const": "invalid_request"
+        },
+        {
+          "description": "A required dependency is unavailable or failed.",
+          "type": "string",
+          "const": "dependency_failed"
+        },
+        {
+          "description": "The requested resource does not exist.",
+          "type": "string",
+          "const": "not_found"
+        },
+        {
+          "description": "The operation conflicts with the current state or revision.",
+          "type": "string",
+          "const": "conflict"
+        },
+        {
+          "description": "The requested operation or feature is unsupported.",
+          "type": "string",
+          "const": "unsupported"
+        }
+      ]
+    },
+    "Outcome": {
+      "description": "A response result, encoded as `{\"status\":\"ok\"|\"err\",\"value\":...}`.",
+      "oneOf": [
+        {
+          "description": "Successful method result.",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "ok"
+            },
+            "value": true
+          },
+          "required": [
+            "status",
+            "value"
+          ]
+        },
+        {
+          "description": "Structured failure.",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "err"
+            },
+            "value": {
+              "$ref": "#/$defs/RpcError"
+            }
+          },
+          "required": [
+            "status",
+            "value"
+          ]
+        }
+      ]
+    },
+    "ProtocolVersion": {
+      "description": "Wire protocol version; peers must negotiate compatibility before activation.",
+      "type": "object",
+      "properties": {
+        "major": {
+          "description": "Major version; differing major versions are incompatible.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "minor": {
+          "description": "Minor version; additions must preserve the major version's compatibility.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "major",
+        "minor"
+      ]
+    },
+    "RpcError": {
+      "description": "A stable error category with a human-readable diagnostic.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "Machine-readable error category.",
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "message": {
+          "description": "Diagnostic text; producers must avoid exposing secrets.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ]
+    }
+  }
+}

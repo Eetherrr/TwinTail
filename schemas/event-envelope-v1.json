@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EventEnvelope",
+  "description": "Host-stamped event delivered to each matching subscriber, without replay guarantees.",
+  "type": "object",
+  "properties": {
+    "bot": {
+      "description": "Authenticated source account and adapter instance.",
+      "$ref": "#/$defs/BotRef"
+    },
+    "event_id": {
+      "description": "Host-local event correlation ID; not an upstream deduplication key.",
+      "type": "string"
+    },
+    "event_type": {
+      "description": "Exact subscription event type.",
+      "type": "string"
+    },
+    "payload": {
+      "description": "Original protocol JSON, including extension fields."
+    },
+    "protocol": {
+      "description": "Protocol namespace.",
+      "type": "string"
+    },
+    "received_at_ms": {
+      "description": "Host receive time since Unix epoch in milliseconds.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "event_id",
+    "bot",
+    "received_at_ms",
+    "protocol",
+    "event_type",
+    "payload"
+  ],
+  "$defs": {
+    "BotRef": {
+      "description": "An account attached to one host-assigned adapter instance (including its generation).",
+      "type": "object",
+      "properties": {
+        "adapter_instance_id": {
+          "description": "Host-assigned adapter instance ID; never a plugin-selected routing identity.",
+          "type": "string"
+        },
+        "self_id": {
+          "description": "Protocol account identifier represented as a string without precision loss.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "adapter_instance_id",
+        "self_id"
+      ]
+    }
+  }
+}

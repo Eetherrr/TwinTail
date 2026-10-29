@@ -1,0 +1,21 @@
+[package]
+name = "twintail-plugin-sdk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+tokio.workspace = true
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+twintail-protocol = { path = "../twintail-protocol" }
+
+[dev-dependencies]
+twintail-core = { path = "../twintail-core" }
+tempfile = "3"
+toml = "0.9"
+
+[lints]
+workspace = true

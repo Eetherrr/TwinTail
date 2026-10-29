@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Initialize",
+  "description": "Host-assigned instance context delivered after negotiation.",
+  "type": "object",
+  "properties": {
+    "config": {
+      "description": "Optional applied configuration snapshot; absent on older hosts/fixtures.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ConfigSnapshot"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "config_revision": {
+      "description": "Configuration revision selected for initialization.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "data_dir": {
+      "description": "Plugin-private data directory supplied by the host.",
+      "type": "string"
+    },
+    "generation": {
+      "description": "Host-assigned process generation.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "granted_capabilities": {
+      "description": "Capabilities explicitly granted by the host.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "instance_id": {
+      "description": "Host-assigned instance identifier.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "instance_id",
+    "generation",
+    "granted_capabilities",
+    "data_dir",
+    "config_revision"
+  ],
+  "$defs": {
+    "ConfigSnapshot": {
+      "description": "An immutable configuration revision supplied by the host.\n\nValues may contain sensitive data or secret references. Consumers must never\nwrite full snapshots into diagnostics, logs or externally visible errors.",
+      "type": "object",
+      "properties": {
+        "config_version": {
+          "description": "Plugin-defined schema/migration version; independent of package version.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "revision": {
+          "description": "Host-assigned monotonically increasing revision.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "values": {
+          "description": "Configuration object validated by the host before delivery."
+        }
+      },
+      "required": [
+        "config_version",
+        "revision",
+        "values"
+      ]
+    }
+  }
+}

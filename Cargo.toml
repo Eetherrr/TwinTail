@@ -1,0 +1,19 @@
+[workspace]
+members = ["crates/twintail-host", "crates/twintail-protocol", "crates/twintail-core", "crates/twintail-plugin-sdk", "examples/echo-plugin", "examples/mock-adapter", "crates/twintail-onebot11", "adapters/adapter-snowluma", "plugins/web-admin"]
+default-members = ["crates/twintail-host"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99.1"
+publish = false
+license = "MIT"
+repository = "https://github.com/Eetherrr/TwinTail"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["macros", "rt", "signal", "process", "io-util", "io-std", "sync", "time", "net"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"

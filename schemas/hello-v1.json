@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Hello",
+  "description": "Initial plugin identity and requested capabilities; identity is not authorization.",
+  "type": "object",
+  "properties": {
+    "plugin_id": {
+      "description": "Stable plugin identifier, checked against the host's process binding.",
+      "type": "string"
+    },
+    "required_capabilities": {
+      "description": "Capabilities required for activation.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "version": {
+      "description": "Plugin package version.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "plugin_id",
+    "version",
+    "required_capabilities"
+  ]
+}

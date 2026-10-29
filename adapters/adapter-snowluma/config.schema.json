@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SnowLuma Universal WebSocket configuration (restart required)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "self_id"
+  ],
+  "properties": {
+    "url": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 4096,
+      "description": "Required ws/wss endpoint in forward mode; omit or leave empty in reverse mode."
+    },
+    "self_id": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$",
+      "maxLength": 128
+    },
+    "access_token": {
+      "type": "string",
+      "writeOnly": true,
+      "minLength": 1,
+      "maxLength": 4096,
+      "description": "Resolved by host from a secret reference; transmitted only as Authorization Bearer. Never put credentials in URL."
+    },
+    "action_timeout_ms": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 30000,
+      "default": 3000
+    },
+    "connect_timeout_ms": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 10000,
+      "default": 3000
+    },
+    "reconnect_initial_ms": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 60000,
+      "default": 100
+    },
+    "reconnect_max_ms": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 60000,
+      "default": 10000
+    },
+    "ping_interval_ms": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 60000,
+      "default": 15000
+    },
+    "pong_timeout_ms": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 60000,
+      "default": 10000
+    },
+    "max_pending": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1024,
+      "default": 64
+    },
+    "event_queue": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4096,
+      "default": 64
+    },
+    "max_frame_bytes": {
+      "type": "integer",
+      "minimum": 1024,
+      "maximum": 4194304,
+      "default": 1048576
+    },
+    "transport": {
+      "type": "string",
+      "enum": [
+        "forward_ws",
+        "reverse_ws"
+      ],
+      "default": "forward_ws"
+    },
+    "reverse_bind": {
+      "type": "string",
+      "default": "127.0.0.1:17281",
+      "maxLength": 64,
+      "description": "Numeric loopback SocketAddr only; remote binding is rejected, including with a token."
+    },
+    "reverse_path": {
+      "type": "string",
+      "default": "/onebot/v11",
+      "maxLength": 1024,
+      "pattern": "^/[^\\s?#]*$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "transport": {
+            "const": "reverse_ws"
+          }
+        },
+        "required": [
+          "transport"
+        ]
+      },
+      "then": {
+        "properties": {
+          "url": {
+            "const": ""
+          }
+        }
+      },
+      "else": {
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "minLength": 1,
+            "pattern": "^wss?://"
+          }
+        }
+      }
+    }
+  ]
+}
