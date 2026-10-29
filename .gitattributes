@@ -1,2 +1,5 @@
-# Preserve upstream legal texts exactly, including original whitespace.
-third-party-licenses/*.txt whitespace=-blank-at-eol
+# Generated schemas, OpenAPI and bundled web assets compare exact bytes on every OS.
+* text=auto eol=lf
+
+# Preserve upstream legal texts exactly, including original bytes and whitespace.
+third-party-licenses/*.txt -text whitespace=-blank-at-eol

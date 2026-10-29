@@ -26,6 +26,10 @@
 - 修复 Windows 包校验在转换原生路径分隔符之前调用 wire 路径规则的问题；仅内部枚举路径按安全组件转换，外来 manifest/receipt 和 Unix 字面反斜杠仍严格拒绝，增加三项回归。
 - 启动查询回归改用 fixture 的 held-handshake marker/release 屏障验证管理请求在启动阻塞时仍返回 running，再验证重启中断恢复；保留有界读取，消除依赖共享 runner 调度速度的 500ms 断言。
 
+- 固定项目文本 checkout 使用 LF，消除 Windows core.autocrlf 对 Schema/OpenAPI 精确漂移检查的影响；第三方许可证使用 -text 保留上游原始字节，不通过放宽生成合同比较规避漂移。
+
+- 包安装完成 receipt 同步后显式关闭写句柄，再执行 staging 目录重命名，保留同步、路径校验和原子发布顺序，兼容 Windows 文件句柄约束。
+
 ### P6 Added
 
 - 新增 ADR 0007 与发行、运维、平台、插件合同及迁移指南；保持 wire 1.2、包版本 0.1.0 和 config_version 1，旧正向配置省略 transport 仍兼容。

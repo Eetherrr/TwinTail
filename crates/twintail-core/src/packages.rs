@@ -351,6 +351,8 @@ impl PackageStore {
             .map_err(io)?;
         output.write_all(&checksums).map_err(io)?;
         output.sync_all().map_err(io)?;
+        // Windows cannot rename the staging directory with its receipt still open.
+        drop(output);
         let parent = destination
             .parent()
             .ok_or_else(|| invalid("invalid package destination"))?;
