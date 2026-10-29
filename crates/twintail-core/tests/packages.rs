@@ -293,3 +293,61 @@ fn lightweight_inventory_rejects_receipt_and_content_links() {
     symlink("receipt-backup", receipt).unwrap();
     assert!(store.inventory().is_err());
 }
+
+#[test]
+fn generated_inventory_paths_use_portable_separators() {
+    let temp = TempDir::new().unwrap();
+    let src = source(temp.path());
+    let nested = Path::new("assets").join("nested").join("resource.txt");
+    fs::create_dir_all(src.join(nested.parent().unwrap())).unwrap();
+    fs::write(src.join(&nested), "resource").unwrap();
+    let store = PackageStore::new(temp.path().join("packages")).unwrap();
+    let installed = store.install_local(&src).unwrap();
+    let receipt: std::collections::BTreeMap<String, String> =
+        serde_json::from_slice(&fs::read(installed.path.join("checksums.json")).unwrap()).unwrap();
+    assert!(receipt.contains_key("bin/plugin"));
+    assert!(receipt.contains_key("assets/nested/resource.txt"));
+    assert!(receipt.keys().all(|path| !path.contains('\\')));
+    assert_eq!(
+        store.verify("sample", "1.0.0").unwrap().checksum,
+        installed.checksum
+    );
+    assert_eq!(store.inventory().unwrap().len(), 1);
+}
+
+#[test]
+fn user_manifest_and_receipt_paths_keep_rejecting_backslashes() {
+    let temp = TempDir::new().unwrap();
+    let src = source(temp.path());
+    let mut manifest = read_manifest(&src);
+    manifest.entrypoint = "bin\\plugin".into();
+    write_manifest(&src, &manifest);
+    assert!(load_package(&src, &[]).is_err());
+    manifest.entrypoint = "bin/plugin".into();
+    manifest.config_schema = Some("schemas\\config.json".into());
+    write_manifest(&src, &manifest);
+    assert!(load_package(&src, &[]).is_err());
+    manifest.config_schema = None;
+    write_manifest(&src, &manifest);
+    let store = PackageStore::new(temp.path().join("packages")).unwrap();
+    let installed = store.install_local(&src).unwrap();
+    let receipt_path = installed.path.join("checksums.json");
+    let mut receipt: std::collections::BTreeMap<String, String> =
+        serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+    let checksum = receipt.remove("bin/plugin").unwrap();
+    receipt.insert("bin\\plugin".into(), checksum);
+    fs::write(receipt_path, serde_json::to_vec(&receipt).unwrap()).unwrap();
+    assert!(store.inventory().is_err());
+    assert!(store.verify("sample", "1.0.0").is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn native_unix_backslash_filename_is_rejected_without_aliasing() {
+    let temp = TempDir::new().unwrap();
+    let src = source(temp.path());
+    fs::write(src.join("literal\\name"), "resource").unwrap();
+    let store = PackageStore::new(temp.path().join("packages")).unwrap();
+    assert!(store.install_local(&src).is_err());
+    assert!(store.inventory().unwrap().is_empty());
+}

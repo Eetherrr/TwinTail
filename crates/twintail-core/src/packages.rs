@@ -101,14 +101,23 @@ fn inventory(root: &Path) -> Result<BTreeMap<String, String>, RpcError> {
             let relative = path
                 .strip_prefix(root)
                 .map_err(|_| invalid("package path escapes root"))?;
-            crate::plan::validate_relative(relative, "package file")?;
             if relative.components().count() > 64 {
                 return Err(invalid("package directory nesting exceeds limit"));
             }
+            // Filesystem paths use native separators; receipt keys use portable '/'.
+            // Validate components before converting so user-supplied path syntax
+            // never gains the normalization allowed for these generated paths.
             let name = relative
-                .to_str()
-                .ok_or_else(|| invalid("package paths must be UTF-8"))?
-                .replace('\\', "/");
+                .components()
+                .map(|component| match component {
+                    std::path::Component::Normal(value) => value
+                        .to_str()
+                        .ok_or_else(|| invalid("package paths must be UTF-8")),
+                    _ => Err(invalid("package path escapes root")),
+                })
+                .collect::<Result<Vec<_>, _>>()?
+                .join("/");
+            crate::plan::validate_relative(Path::new(&name), "package file")?;
             let metadata = fs::symlink_metadata(&path).map_err(io)?;
             if metadata.file_type().is_symlink() {
                 return Err(invalid("package contains a symbolic link"));

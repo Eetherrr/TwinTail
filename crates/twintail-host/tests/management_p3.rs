@@ -44,12 +44,14 @@ impl Host {
             .spawn()
             .unwrap();
         let stderr = child.stderr.take().unwrap();
+        let host_pid = child.id();
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
             for line in std::io::BufReader::new(stderr)
                 .lines()
                 .map_while(Result::ok)
             {
+                eprintln!("host {host_pid}: {line}");
                 let _ = tx.send(line);
             }
         });
@@ -77,7 +79,12 @@ impl Host {
             .set_read_timeout(Some(Duration::from_secs(8)))
             .unwrap();
         write_json(&mut stream, &Message::request("p3-test", method, payload)).unwrap();
-        let response: Message = read_json(&mut stream).unwrap();
+        let response: Message = read_json(&mut stream).unwrap_or_else(|error| {
+            panic!(
+                "host {} management {method} read failed: {error}",
+                self.child.id()
+            )
+        });
         match response.body {
             twintail_protocol::Body::Response {
                 outcome: Outcome::Ok(value),
@@ -355,21 +362,43 @@ fn startup_queries_are_responsive_and_interrupted_bootstrap_is_recovered() {
     let temp = tempfile::tempdir().unwrap();
     let data = temp.path().join("data");
     let packages = temp.path().join("packages");
-    let package = source(temp.path(), "source", "slow-handshake", "0.1.0");
+    let held = temp.path().join("handshake-held");
+    let release = held.with_extension("release");
+    let package = source(temp.path(), "source", "held-handshake", "0.1.0");
+    let manifest = package.join("plugin.toml");
+    let mut value: toml::Value = toml::from_str(&fs::read_to_string(&manifest).unwrap()).unwrap();
+    value["args"] = toml::Value::try_from(vec![
+        "held-handshake",
+        "plugin",
+        "unused",
+        held.to_str().unwrap(),
+    ])
+    .unwrap();
+    fs::write(manifest, toml::to_string(&value).unwrap()).unwrap();
     PackageStore::new(&packages)
         .unwrap()
         .install_local(package)
         .unwrap();
     plan(&data, "0.1.0");
-    let child = Command::new(env!("CARGO_BIN_EXE_twintail-host"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_twintail-host"))
         .arg("--data-dir")
         .arg(&data)
         .arg("--install-dir")
         .arg(&packages)
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let host_pid = child.id();
+    std::thread::spawn(move || {
+        for line in std::io::BufReader::new(stderr)
+            .lines()
+            .map_while(Result::ok)
+        {
+            eprintln!("handshake host {host_pid}: {line}");
+        }
+    });
     let mut host = Host {
         child,
         data: data.clone(),
@@ -397,14 +426,33 @@ fn startup_queries_are_responsive_and_interrupted_bootstrap_is_recovered() {
             Err(error) => panic!("management endpoint connection failed: {error}"),
         }
     };
-    let started = Instant::now();
+    // The fixture cannot send ready until this test releases the barrier.
+    // Await explicit entry into handshake, then require a bounded query response
+    // while startup remains blocked, independently of scheduler wall-clock speed.
+    let deadline = Instant::now() + Duration::from_secs(8);
+    while !held.is_file() {
+        assert!(
+            host.child.try_wait().unwrap().is_none(),
+            "host exited before handshake barrier"
+        );
+        assert!(
+            Instant::now() < deadline,
+            "fixture did not enter handshake barrier"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(!release.exists());
     let operations = host.raw_connected(stream, "operations.list", json!({}));
-    assert!(started.elapsed() < Duration::from_millis(500));
+    assert!(
+        !release.exists(),
+        "query must finish before handshake is released"
+    );
     let operation = operations.as_array().unwrap().last().unwrap();
     assert_eq!(operation["state"], "running");
     let id = operation["id"].as_str().unwrap().to_owned();
     host.shutdown();
     drop(host);
+    fs::write(release, b"allow restarted bootstrap").unwrap();
     let mut host = Host::start(&data, &packages);
     assert_eq!(
         host.raw("operations.get", json!({"id":id}))["state"],

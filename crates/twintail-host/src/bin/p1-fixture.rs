@@ -135,6 +135,15 @@ fn run() -> io::Result<()> {
     } else {
         None
     };
+    if mode == "held-handshake" {
+        let marker = marker
+            .as_ref()
+            .ok_or_else(|| io::Error::other("missing handshake barrier"))?;
+        std::fs::write(marker, b"handshake held")?;
+        while !marker.with_extension("release").is_file() {
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
     if mode == "slow-handshake" {
         if let Some(marker) = &marker {
             std::fs::write(marker, b"handshake pending")?;

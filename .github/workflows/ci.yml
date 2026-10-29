@@ -37,7 +37,7 @@ jobs:
       - name: Build host and plugin examples
         run: cargo build -p twintail-host -p echo-plugin -p mock-adapter -p adapter-snowluma -p web-admin --locked
       - name: Tests
-        run: cargo test --workspace --locked
+        run: cargo test --workspace --locked --no-fail-fast
       - name: Linux adapter CLI smoke
         if: runner.os == 'Linux'
         run: TWINTAIL_HOST_BIN="$GITHUB_WORKSPACE/target/debug/twintail-host" cargo test -p adapter-snowluma --test cli_p4 --locked -- --ignored
