@@ -30,6 +30,8 @@
 
 - 包安装完成 receipt 同步后显式关闭写句柄，再执行 staging 目录重命名，保留同步、路径校验和原子发布顺序，兼容 Windows 文件句柄约束。
 
+- 包安装回归按 canonical 路径比较预期位置，兼容 Windows 的扩展长度路径前缀；保持 PackageStore 返回规范路径的现有 API。
+
 ### P6 Added
 
 - 新增 ADR 0007 与发行、运维、平台、插件合同及迁移指南；保持 wire 1.2、包版本 0.1.0 和 config_version 1，旧正向配置省略 transport 仍兼容。

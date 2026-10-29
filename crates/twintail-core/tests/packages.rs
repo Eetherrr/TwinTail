@@ -24,7 +24,10 @@ fn install_verify_inventory_no_overwrite_and_uninstall_preserves_data() {
     fs::create_dir_all(temp.path().join("data/sample")).unwrap();
     fs::write(temp.path().join("data/sample/config.toml"), "private").unwrap();
     let package = store.install_local(&src).unwrap();
-    assert_eq!(package.path, temp.path().join("packages/sample/1.0.0"));
+    assert_eq!(
+        package.path,
+        fs::canonicalize(temp.path().join("packages/sample/1.0.0")).unwrap()
+    );
     assert_eq!(package.checksum.len(), 64);
     assert_eq!(
         store.verify("sample", "1.0.0").unwrap().checksum,
