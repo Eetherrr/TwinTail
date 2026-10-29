@@ -21,7 +21,7 @@
 
 - 修复 Windows 配置路径检查提前探测裸盘符/verbatim prefix 的问题，拒绝盘符相对路径及 junction/reparse point，增加普通/extended 路径加载、原子配置恢复和 junction 回归。
 - 将反向重复连接测试与鉴权测试分离：鉴权仍严格要求 401/403；best-effort 重复连接仅接受 409 或特定 ConnectionReset，并验证原认证连接的动作回环和代次所有权。
-- Web CI 的 Chromium 安装在下载 100% 后无输出停留十二分钟；改用与锁定 Playwright 1.56.1 匹配的官方预装浏览器镜像，保留全部浏览器交互/生产构建/资源漂移检查并设置任务期限。
+- Web CI 的 Chromium 安装在下载 100% 后无输出停留十二分钟；改用与锁定 Playwright 1.56.1 匹配的官方预装浏览器镜像，保留全部浏览器交互/生产构建/资源漂移检查并设置任务期限。容器中的资源漂移检查显式使用 workspace 和单次 safe.directory，兼容 checkout 与后续步骤的用户/工作目录差异。
 
 ### P6 Added
 
