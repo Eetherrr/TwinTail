@@ -452,3 +452,76 @@ fn management_policy_does_not_mark_unapplied_definitions_as_secrets() {
     config.update(0, values.clone()).unwrap();
     assert_eq!(config.read_for_management().unwrap().values, values);
 }
+
+#[cfg(windows)]
+#[test]
+fn windows_native_and_verbatim_roots_support_schema_and_repeated_transactions() {
+    use std::path::{Component, PathBuf, Prefix};
+    let (data, package) = roots();
+    fs::write(package.path().join("schema.json"), r#"{"type":"object"}"#).unwrap();
+    let extended_data = fs::canonicalize(data.path()).unwrap();
+    let extended_package = fs::canonicalize(package.path()).unwrap();
+    // canonicalize uses the extended namespace on Windows. Exercise both forms,
+    // including the ordinary drive path supplied by CARGO_MANIFEST_DIR in CI.
+    let native = |path: &std::path::Path| {
+        PathBuf::from(path.to_str().unwrap().strip_prefix(r"\\?\").unwrap())
+    };
+    let native_data = native(&extended_data);
+    let native_package = native(&extended_package);
+    assert!(
+        matches!(native_data.components().next(), Some(Component::Prefix(p)) if matches!(p.kind(), Prefix::Disk(_)))
+    );
+    assert!(
+        matches!(extended_data.components().next(), Some(Component::Prefix(p)) if matches!(p.kind(), Prefix::VerbatimDisk(_)))
+    );
+    for (root, package, child) in [
+        (&native_data, &native_package, "native"),
+        (&extended_data, &extended_package, "extended"),
+    ] {
+        let directory = root.join(child).join("config");
+        let mut config = ConfigStore::open(&directory, package, Some("schema.json"), 1).unwrap();
+        config.update(0, json!({"enabled":true})).unwrap();
+        config.mark_applied(1).unwrap();
+        config.update(1, json!({"enabled":false})).unwrap();
+        let reopened = ConfigStore::open(&directory, package, Some("schema.json"), 1).unwrap();
+        assert_eq!(reopened.read().unwrap().values, json!({"enabled":false}));
+        assert_eq!(reopened.status().unwrap().desired_revision, 2);
+        assert_eq!(reopened.status().unwrap().applied_revision, Some(1));
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_drive_relative_configuration_roots_are_rejected() {
+    let (_, package) = roots();
+    let result = ConfigStore::open(
+        std::path::Path::new(r"C:twintail-unsafe-relative"),
+        package.path(),
+        None,
+        1,
+    );
+    assert_eq!(result.err().unwrap().reason, "unsafe configuration path");
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_junction_roots_ancestors_and_schema_packages_are_rejected() {
+    let (data, package) = roots();
+    let outside = tempfile::tempdir().unwrap();
+    fs::write(outside.path().join("schema.json"), "true").unwrap();
+    let junction = data.path().join("junction");
+    // Creating a directory junction needs no symlink privilege or Developer Mode.
+    let output = std::process::Command::new("cmd.exe")
+        .args(["/D", "/C", "mklink", "/J"])
+        .arg(&junction)
+        .arg(outside.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "junction fixture creation failed");
+    assert!(ConfigStore::open(&junction, package.path(), None, 1).is_err());
+    assert!(ConfigStore::open(&junction.join("child"), package.path(), None, 1).is_err());
+    assert!(!outside.path().join("child").exists());
+    assert!(ConfigStore::open(data.path(), &junction, Some("schema.json"), 1).is_err());
+    assert!(ConfigStore::open(data.path(), data.path(), Some("junction/schema.json"), 1).is_err());
+    fs::remove_dir(junction).unwrap();
+}

@@ -85,6 +85,7 @@ async fn text(socket: &mut Socket) -> Value {
     .await
     .unwrap()
 }
+#[track_caller]
 fn status(error: Error) -> u16 {
     match error {
         Error::Http(response) => response.status().as_u16(),
@@ -92,7 +93,7 @@ fn status(error: Error) -> u16 {
     }
 }
 #[tokio::test]
-async fn reverse_auth_account_role_path_and_duplicate_are_enforced() {
+async fn reverse_auth_account_role_path_and_unique_headers_are_enforced() {
     let (transport, _events, address) = setup(json!({"access_token":"synthetic-secret"})).await;
     assert_eq!(
         status(
@@ -107,7 +108,8 @@ async fn reverse_auth_account_role_path_and_duplicate_are_enforced() {
             .err()
             .unwrap()
         ),
-        401
+        401,
+        "missing Bearer credential must return HTTP 401"
     );
     for (path, account, role) in [
         ("/onebot/v11", Some("other"), Some("Universal")),
@@ -129,7 +131,8 @@ async fn reverse_auth_account_role_path_and_duplicate_are_enforced() {
                 .err()
                 .unwrap()
             ),
-            403
+            403,
+            "path={path}, account={account:?}, role={role:?} must return HTTP 403"
         );
     }
     for name in ["authorization", "x-self-id", "x-client-role"] {
@@ -148,7 +151,8 @@ async fn reverse_auth_account_role_path_and_duplicate_are_enforced() {
         let failure = connect_async(request).await.err().unwrap();
         assert_eq!(
             status(failure),
-            if name == "authorization" { 401 } else { 403 }
+            if name == "authorization" { 401 } else { 403 },
+            "duplicate {name} header must return the exact HTTP rejection"
         );
     }
     let mut socket = client(
@@ -161,21 +165,6 @@ async fn reverse_auth_account_role_path_and_duplicate_are_enforced() {
     .await
     .unwrap();
     online(&transport, 1).await;
-    assert_eq!(
-        status(
-            client(
-                address,
-                "/onebot/v11",
-                Some("10001"),
-                Some("Universal"),
-                Some("Bearer synthetic-secret")
-            )
-            .await
-            .err()
-            .unwrap()
-        ),
-        409
-    );
     socket
         .send(Message::Text(
             json!({"post_type":"message","self_id":99999,"message":"mismatch"})
@@ -186,6 +175,64 @@ async fn reverse_auth_account_role_path_and_duplicate_are_enforced() {
         .unwrap();
     sleep(Duration::from_millis(10)).await;
     assert!(transport.status().rejected_frames > 0);
+    assert_eq!(transport.status().generation, 1);
+    transport.stop().await;
+}
+// When the slot is occupied the actor deliberately does not read the second
+// client's request. Dropping a socket with unread data may produce TCP RST on
+// Windows; HTTP 409 is best effort. Authentication failures above remain exact
+// HTTP assertions and never accept transport errors as authorization evidence.
+#[tokio::test]
+async fn reverse_duplicate_is_rejected_and_original_session_keeps_action_ownership() {
+    let (transport, _events, address) = setup(json!({"access_token":"synthetic-secret"})).await;
+    let mut original = client(
+        address,
+        "/onebot/v11",
+        Some("10001"),
+        Some("Universal"),
+        Some("Bearer synthetic-secret"),
+    )
+    .await
+    .unwrap();
+    online(&transport, 1).await;
+    let duplicate = timeout(
+        Duration::from_secs(1),
+        client(
+            address,
+            "/onebot/v11",
+            Some("10001"),
+            Some("Universal"),
+            Some("Bearer synthetic-secret"),
+        ),
+    )
+    .await
+    .expect("duplicate must be rejected promptly");
+    match duplicate {
+        Err(Error::Http(response)) => assert_eq!(response.status().as_u16(), 409),
+        Err(Error::Io(error)) if error.kind() == std::io::ErrorKind::ConnectionReset => {}
+        Err(other) => panic!("unexpected duplicate rejection: {other}"),
+        Ok(_) => panic!("second connection must not complete a WebSocket upgrade"),
+    }
+    // A reset alone does not establish exclusive ownership: prove that the
+    // authenticated original socket still receives and completes host actions.
+    let action_transport = transport.clone();
+    let action = tokio::spawn(async move {
+        action_transport
+            .action("get_status".into(), json!({}))
+            .await
+    });
+    let request = text(&mut original).await;
+    assert_eq!(request["action"], "get_status");
+    original
+        .send(Message::Text(
+            json!({"status":"ok","retcode":0,"data":{"owner":"original"},"echo":request["echo"]})
+                .to_string()
+                .into(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(action.await.unwrap().unwrap()["data"]["owner"], "original");
+    assert!(transport.status().connected);
     assert_eq!(transport.status().generation, 1);
     transport.stop().await;
 }

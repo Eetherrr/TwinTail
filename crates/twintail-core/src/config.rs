@@ -653,13 +653,23 @@ fn resolve(
 }
 fn check_path(path: &Path) -> Result<(), ConfigError> {
     let mut current = PathBuf::new();
-    for component in path.components() {
+    let mut components = path.components().peekable();
+    while let Some(component) = components.next() {
         if matches!(component, Component::ParentDir) {
             return Err(error("/", "unsafe configuration path"));
         }
         current.push(component);
+        if matches!(component, Component::Prefix(_)) {
+            // A Windows prefix is not a filesystem root: probing `C:` or
+            // `\\\\?\\C:` before its RootDir can fail or use drive-local state.
+            // Reject drive-relative paths and inspect the complete root next.
+            if !matches!(components.peek(), Some(Component::RootDir)) {
+                return Err(error("/", "unsafe configuration path"));
+            }
+            continue;
+        }
         match fs::symlink_metadata(&current) {
-            Ok(metadata) if metadata.file_type().is_symlink() => {
+            Ok(metadata) if is_link_or_reparse_point(&metadata) => {
                 return Err(error("/", "symlinks are forbidden"));
             }
             Ok(_) => {}
@@ -668,6 +678,18 @@ fn check_path(path: &Path) -> Result<(), ConfigError> {
         }
     }
     Ok(())
+}
+fn is_link_or_reparse_point(metadata: &fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        // Junctions and other reparse points need not report as symlinks.
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return true;
+        }
+    }
+    metadata.file_type().is_symlink()
 }
 fn read_bounded(path: &Path, limit: usize) -> Result<Vec<u8>, ConfigError> {
     check_path(path)?;

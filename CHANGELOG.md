@@ -19,6 +19,10 @@
 - 首次 GitHub Linux x64/arm64 CI 暴露停止握手测试的同步竞态：mock 先确认完整 HTTP Upgrade 请求再取消，保留原 250ms 取消/EOF 门槛和 Drop 关闭检查。
 - 修复原生 Windows 构建 Web 内嵌资源时误拒绝目录分隔符；按安全 UTF-8 路径组件生成 URL，拒绝绝对路径、parent、非法前缀等，并增加 Linux/Windows 原生路径回归测试。
 
+- 修复 Windows 配置路径检查提前探测裸盘符/verbatim prefix 的问题，拒绝盘符相对路径及 junction/reparse point，增加普通/extended 路径加载、原子配置恢复和 junction 回归。
+- 将反向重复连接测试与鉴权测试分离：鉴权仍严格要求 401/403；best-effort 重复连接仅接受 409 或特定 ConnectionReset，并验证原认证连接的动作回环和代次所有权。
+- Web CI 的 Chromium 安装在下载 100% 后无输出停留十二分钟；改用与锁定 Playwright 1.56.1 匹配的官方预装浏览器镜像，保留全部浏览器交互/生产构建/资源漂移检查并设置任务期限。
+
 ### P6 Added
 
 - 新增 ADR 0007 与发行、运维、平台、插件合同及迁移指南；保持 wire 1.2、包版本 0.1.0 和 config_version 1，旧正向配置省略 transport 仍兼容。

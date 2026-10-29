@@ -58,6 +58,9 @@ jobs:
   web:
     name: WebUI / Node 26.7.0
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Match @playwright/test in package-lock.json; browsers and OS deps are preinstalled.
+    container: mcr.microsoft.com/playwright:v1.56.1-noble
     defaults:
       run:
         working-directory: web
@@ -76,9 +79,10 @@ jobs:
         run: npm run typecheck
       - name: Interaction tests
         run: npm test -- --run
-      - name: Install browser
-        run: npx playwright install --with-deps chromium
+      - name: Check browser image matches locked Playwright
+        run: node -e "if(require('@playwright/test/package.json').version !== '1.56.1') process.exit(1)"
       - name: Browser interactions
+        timeout-minutes: 5
         run: npm run test:browser
       - name: Production build
         run: npm run build
