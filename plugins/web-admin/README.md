@@ -36,4 +36,6 @@ twintail-host plugins enable web-admin 0.1.0 '["management.read","management.wri
 
 每次操作返回 operation_id，用 `operations get OPERATION_ID` 等待终态后进行下一步。浏览器打开 `http://127.0.0.1:17280`，使用注入的 token 登录；若仅授予 `management.read`，管理写调用仍被宿主阻止。
 
+插件详情提供独立“彻底移除插件”操作：先停用，输入精确插件 ID 确认后删除该 ID 的全部安装版本、配置与业务数据。普通卸载版本继续保留数据。删除不可恢复，可能因 IO 失败而部分完成，应查看操作阶段并修复后重试；外部资源与全局审计不删除。彻底移除 web-admin 自身前保留 CLI 恢复入口，随后需重新安装、配置并启用才能恢复管理界面。
+
 所有配置为启动期配置；更新按 stop → 带 expected_revision 的 config update → start，每步等待完成。包替换采用 `exclusive` 重载，监听端口与会话重建，浏览器请求可能中断；web-admin 自身停用或失败时使用本机 CLI 恢复。插件无业务数据迁移机制，宿主配置和数据目录独立于版本包，重载不回滚数据。

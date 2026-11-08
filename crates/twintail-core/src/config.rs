@@ -8,6 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     fmt,
@@ -131,6 +132,9 @@ impl ConfigStore {
             return Err(error("/config_version", "version must be positive"));
         }
         check_path(directory)?;
+        let normalized: PathBuf = directory.components().collect();
+        let directory = normalized.as_path();
+        let _namespace = lock_namespace(directory)?;
         let mut builder = fs::DirBuilder::new();
         builder.recursive(true);
         #[cfg(unix)]
@@ -357,29 +361,10 @@ impl ConfigStore {
         }
         Ok(resolved)
     }
-    fn transaction_lock(&self) -> Result<File, ConfigError> {
-        check_path(&self.directory)?;
-        private_dir(&self.directory)?;
-        let path = self.directory.join("config.lock");
-        check_path(&path)?;
-        let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true).truncate(false);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        let file = options.open(&path).map_err(io_error)?;
-        private_file(&path)?;
-        file.try_lock().map_err(|issue| match issue {
-            std::fs::TryLockError::WouldBlock => {
-                error("/revision", "configuration transaction busy")
-            }
-            std::fs::TryLockError::Error(issue) => io_error(issue),
-        })?;
-        // The persistent lock file is deliberately never removed. Closing this
-        // handle releases the OS lock, including on process termination.
-        Ok(file)
+    fn transaction_lock(&self) -> Result<(File, File), ConfigError> {
+        let namespace = lock_namespace(&self.directory)?;
+        let inner = lock_directory(&self.directory)?;
+        Ok((namespace, inner))
     }
     fn atomic_write(&self, name: &str, bytes: &[u8]) -> Result<(), ConfigError> {
         if bytes.len() > MAX_FILE_BYTES {
@@ -402,6 +387,89 @@ impl ConfigStore {
             .map_err(io_error)?;
         Ok(())
     }
+}
+
+// Host metadata outside the deletable namespace. Retirement and reinstall must
+// always use this same inode; neither purge nor normal transactions unlink it.
+pub(crate) fn lock_namespace(directory: &Path) -> Result<File, ConfigError> {
+    check_path(directory)?;
+    let absolute = if directory.exists() {
+        fs::canonicalize(directory).map_err(io_error)?
+    } else if directory.is_absolute() {
+        directory.to_owned()
+    } else {
+        std::env::current_dir().map_err(io_error)?.join(directory)
+    };
+    // Normalize trailing/current-directory components before choosing the parent,
+    // including when the target does not exist yet (e.g. `new-store/.`).
+    let absolute: PathBuf = absolute.components().collect();
+    let parent = absolute
+        .parent()
+        .ok_or_else(|| error("/", "unsafe configuration path"))?;
+    let name = absolute
+        .file_name()
+        .ok_or_else(|| error("/", "unsafe configuration path"))?;
+    // The hidden purge namespace belongs to the original plugin, not a new ID.
+    let name = name
+        .to_str()
+        .and_then(|name| name.strip_prefix(".purge-"))
+        .filter(|name| !name.is_empty())
+        .map(std::ffi::OsStr::new)
+        .unwrap_or(name);
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(parent).map_err(io_error)?;
+    check_path(parent)?;
+    // Even an arbitrary store named `.config-locks` needs a gate outside itself.
+    let metadata_name = if name == ".config-locks" {
+        ".config-locks-meta"
+    } else {
+        ".config-locks"
+    };
+    let root = fs::canonicalize(parent)
+        .map_err(io_error)?
+        .join(metadata_name);
+    check_path(&root)?;
+    builder.create(&root).map_err(io_error)?;
+    private_dir(&root)?;
+    let digest = Sha256::digest(name.as_encoded_bytes());
+    let path = root.join(format!("{digest:x}.lock"));
+    lock_file(&path)
+}
+
+// Retained for older callers and offline tools which lock config.lock directly.
+pub(crate) fn lock_directory(directory: &Path) -> Result<File, ConfigError> {
+    check_path(directory)?;
+    private_dir(directory)?;
+    let path = directory.join("config.lock");
+    lock_file(&path)
+}
+fn lock_file(path: &Path) -> Result<File, ConfigError> {
+    check_path(path)?;
+    if path.exists() {
+        private_file(path)?;
+    }
+    let mut options = OpenOptions::new();
+    options.read(true).write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let file = options.open(path).map_err(io_error)?;
+    private_file(path)?;
+    file.try_lock().map_err(|issue| match issue {
+        std::fs::TryLockError::WouldBlock => error("/revision", "configuration transaction busy"),
+        std::fs::TryLockError::Error(issue) => io_error(issue),
+    })?;
+    // The persistent lock file is deliberately never removed. Closing this
+    // handle releases the OS lock, including on process termination.
+    Ok(file)
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -35,6 +35,6 @@ twintail-host config update example-plugin 3 '{"endpoint":"http://127.0.0.1:9001
 
 get 返回引用快照与 desired/applied 状态。update 返回可查询的 operation，使用 `operations get OPERATION_ID` 跟踪完成，不能将 running 当作成功。上述语法已按当前 CLI 源码核对，运行验收结果另见项目记录。所有管理命令连接正在运行的宿主，只接受 --data-dir；--install-dir 在宿主启动时指定。
 
-新配置文件在 Unix 上使用 0600、目录使用 0700；Windows 继承私有宿主数据根 ACL。同目录临时文件先同步再原子替换，Unix 另同步目录；原子文件替换仍不能覆盖进程提交失败。`config.lock` 使用 OS 文件锁保护 persist/mark_applied 的修订检查与替换，锁竞争返回 conflict；文件保持 0600 且不删除，进程退出释放锁。多个 ConfigStore 对同一修订的竞争写入只能一个成功，插件 prepare/commit 的进程生命周期仍由管理层串行协调。
+新配置文件在 Unix 上使用 0600、目录使用 0700；Windows 继承私有宿主数据根 ACL。同目录临时文件先同步再原子替换，Unix 另同步目录；原子文件替换仍不能覆盖进程提交失败。persist/mark_applied 同时取得父目录 `.config-locks/<SHA256(namespace basename)>.lock` 稳定外部门闩及内部 `config.lock`，保护修订检查与替换，锁竞争返回 conflict；锁文件保持 0600，进程退出释放锁。稳定外部门闩不随插件移除而删除；只有彻底移除完整命名空间时才删除其内部 `config.lock`，且始终持有外部门闩，避免重建锁竞态。升级到这一锁协议前停止旧宿主和独立配置写入者，不支持与仅使用旧内部锁的旧进程并发 purge。多个 ConfigStore 对同一修订的竞争写入只能一个成功，插件 prepare/commit 的进程生命周期仍由管理层串行协调。
 
 在线 prepare/commit 使用 wire 1.2 扩展；SDK 为 P2 兼容仍接受协商 1.1 及更高 minor，这不保证旧宿主提供配置方法。active 插件缺少 prepare 支持时明确返回 unsupported，不落盘。可先 `plugins stop ID`，再用同一 `config update ID EXPECTED_REVISION JSON` 离线仅持久化 desired，最后 `plugins start ID`；每一步等待完成。启动显式配置或有 Schema 的包仍要求配置确认，未实现 config.status 的旧插件不会被标为 applied，不能把离线写入视作兼容性保证。仅无 Schema、revision 0 的默认空配置保留 legacy 免确认路径。配置格式升级应由插件明确实现转换或拒绝，不把 semver 升级等同于自动迁移。参阅[迁移指南](migration.md)。

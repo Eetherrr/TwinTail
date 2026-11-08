@@ -166,6 +166,99 @@ fn plan(data: &Path, version: &str) {
 }
 
 #[test]
+fn confirmed_purge_requires_disabled_removes_all_versions_and_data_and_is_retryable() {
+    let temp = tempfile::tempdir().unwrap();
+    let data = temp.path().join("data");
+    let packages = temp.path().join("packages");
+    let a = source(temp.path(), "a", "normal", "0.1.0");
+    let b = source(temp.path(), "b", "normal", "0.2.0");
+    let store = PackageStore::new(&packages).unwrap();
+    store.install_local(a).unwrap();
+    store.install_local(b).unwrap();
+    fs::create_dir_all(packages.join("other/0.1.0")).unwrap();
+    fs::write(packages.join("other/0.1.0/keep"), "keep").unwrap();
+    plan(&data, "0.1.0");
+    let mut host = Host::start(&data, &packages);
+    let purge = host.raw(
+        "plugins.purge",
+        json!({"id":"plugin","confirm_id":"plugin"}),
+    );
+    let failed = host.terminal(purge["id"].as_str().unwrap());
+    assert_eq!(failed["state"], "failed");
+    assert_eq!(failed["result"]["code"], "conflict");
+    assert!(packages.join("plugin/0.1.0").exists());
+    host.cli(&["plugins", "stop", "plugin"]);
+    let purge = host.raw(
+        "plugins.purge",
+        json!({"id":"plugin","confirm_id":"plugin"}),
+    );
+    assert_eq!(
+        host.terminal(purge["id"].as_str().unwrap())["result"]["code"],
+        "conflict"
+    );
+    let disable = host.cli(&["plugins", "disable", "plugin"]);
+    assert_eq!(
+        host.terminal(disable["id"].as_str().unwrap())["state"],
+        "completed"
+    );
+    fs::create_dir_all(data.join("plugins/plugin/data/nested")).unwrap();
+    fs::write(data.join("plugins/plugin/data/nested/db"), "remove").unwrap();
+    fs::write(
+        data.join("plugins/plugin/config.toml"),
+        "remove config fixture",
+    )
+    .unwrap();
+    fs::create_dir_all(data.join("plugins/other")).unwrap();
+    fs::write(data.join("plugins/other/keep"), "keep").unwrap();
+    for payload in [
+        json!({"id":"plugin"}),
+        json!({"id":"plugin","confirm_id":"other"}),
+    ] {
+        let op = host.raw("plugins.purge", payload);
+        let failed = host.terminal(op["id"].as_str().unwrap());
+        assert_eq!(failed["result"]["code"], "invalid_request");
+    }
+    // A bad data link must prevent package removal, not fail after it.
+    let outside = temp.path().join("outside");
+    fs::create_dir(&outside).unwrap();
+    fs::write(outside.join("keep"), "keep outside").unwrap();
+    let link = data.join("plugins/plugin/data/link");
+    std::os::unix::fs::symlink(&outside, &link).unwrap();
+    let op = host.cli(&["plugins", "purge", "plugin", "--confirm", "plugin"]);
+    let failed = host.terminal(op["id"].as_str().unwrap());
+    assert_eq!(failed["state"], "failed");
+    assert_eq!(failed["stage"], "preflighting_purge");
+    assert_eq!(failed["result"]["code"], "invalid_config");
+    assert!(packages.join("plugin/0.1.0").exists());
+    assert!(data.join("plugins/plugin/config.toml").exists());
+    fs::remove_file(link).unwrap();
+    let invalid_cli = Command::new(env!("CARGO_BIN_EXE_twintail-host"))
+        .args(["plugins", "purge", "plugin", "--confirm", "other"])
+        .arg("--data-dir")
+        .arg(&data)
+        .output()
+        .unwrap();
+    assert!(!invalid_cli.status.success());
+    for _ in 0..2 {
+        let op = host.cli(&["plugins", "purge", "plugin", "--confirm", "plugin"]);
+        let completed = host.terminal(op["id"].as_str().unwrap());
+        assert_eq!(completed["state"], "completed");
+        assert_eq!(completed["stage"], "completed");
+        assert!(!packages.join("plugin").exists());
+        assert!(!data.join("plugins/plugin").exists());
+    }
+    assert_eq!(
+        fs::read_to_string(outside.join("keep")).unwrap(),
+        "keep outside"
+    );
+    assert!(packages.join("other/0.1.0/keep").exists());
+    assert!(data.join("plugins/other/keep").exists());
+    assert!(data.join("operations.json").exists());
+    assert!(data.join("host.toml").exists());
+    host.shutdown();
+}
+
+#[test]
 fn cli_install_is_disk_only_and_damaged_disabled_package_can_be_uninstalled() {
     let temp = tempfile::tempdir().unwrap();
     let data = temp.path().join("data");

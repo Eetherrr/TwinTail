@@ -5,6 +5,7 @@ import type { Operation } from '../src/api'
 const plugin = { id: 'echo-plugin', version: '1.0.0', state: 'active', generation: 1, error: null }
 const snapshot = { snapshot: { revision: 4, config_version: 1, values: { prefix: 'hello', auth: { $secret: 'env:TEST_TOKEN' } } }, status: { desired_revision: 4, applied_revision: 4 }, schema: { type: 'object', properties: { prefix: { type: 'string' } } } }
 const wrappers: VueWrapper[] = []
+let pluginEnabled = true, fixtureId = plugin.id
 let readonly = false, expired = false, loginRequired = false, conflict = false
 let ops: Operation[] = [], calls: { method: string; payload: Record<string, unknown> }[] = []
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status })
@@ -15,7 +16,7 @@ async function openEditor(wrapper: VueWrapper) { await (wrapper.find('.plugin-ca
 async function setup() { const wrapper = mount(App); wrappers.push(wrapper); await flushPromises(); return wrapper }
 beforeEach(() => {
   vi.stubGlobal('localStorage', { setItem: vi.fn(), getItem: vi.fn() }); vi.stubGlobal('sessionStorage', { setItem: vi.fn(), getItem: vi.fn() })
-  vi.useFakeTimers(); readonly = false; expired = false; loginRequired = false; conflict = false; ops = []; calls = []
+  vi.useFakeTimers(); pluginEnabled = true; fixtureId = plugin.id; readonly = false; expired = false; loginRequired = false; conflict = false; ops = []; calls = []
   readmeReply = () => response({ result: { filename: null, content: null, verified: false } })
   vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
     if (path === '/api/v1/session') {
@@ -26,8 +27,8 @@ beforeEach(() => {
     if (expired) return response({ error: { code: 'Unauthorized', message: 'expired' } }, 401)
     const body = JSON.parse(String(init.body)); calls.push(body)
     if (body.method === 'plugins.readme') return readmeReply(body.payload)
-    if (body.method === 'plugins.list') return response({ result: [plugin] })
-    if (body.method === 'plugins.installed') return response({ result: [{ id: plugin.id, version: plugin.version, path: '/fixture', checksum: 'x' }, { id: 'other-plugin', version: '2.0.0', path: '/other', checksum: 'y' }, { id: plugin.id, version: '1.1.0', path: '/fixture-new', checksum: 'z' }] })
+    if (body.method === 'plugins.list') return response({ result: pluginEnabled ? [{ ...plugin, id: fixtureId }] : [] })
+    if (body.method === 'plugins.installed') return response({ result: [{ id: fixtureId, version: plugin.version, path: '/fixture', checksum: 'x' }, { id: 'other-plugin', version: '2.0.0', path: '/other', checksum: 'y' }, { id: fixtureId, version: '1.1.0', path: '/fixture-new', checksum: 'z' }] })
     if (body.method === 'operations.list') return response({ result: ops })
     if (body.method === 'management.overview') return response({ result: { permissions: { read: true, write: !readonly }, readonly } })
     if (body.method === 'config.schema' || body.method === 'config.get') return response({ result: snapshot })
@@ -240,5 +241,69 @@ describe('management interactions', () => {
     await checkboxes[1].setValue(true)
     await button(wrapper, '确认操作').trigger('click'); await flushPromises()
     expect(calls.find(c => c.method === 'plugins.enable')?.payload.grants).toEqual(['events.subscribe', 'actions.call'])
+  })
+})
+
+describe('independent destructive plugin purge', () => {
+  async function openDisabled(wrapper: VueWrapper) {
+    await wrapper.findAll('nav button')[1].trigger('click')
+    await wrapper.findAll('[role="tab"]')[1].trigger('click')
+    await wrapper.findAll('tbody tr').find(row => row.text().includes(fixtureId))!.get('button').trigger('click')
+    await flushPromises()
+  }
+  it('requires disable and keeps version uninstall separate', async () => {
+    const wrapper = await setup(); await openEditor(wrapper)
+    expect(button(wrapper, '彻底移除插件').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.purge-panel').text()).toContain('请先停用插件')
+    expect(wrapper.get('.purge-panel').text()).toContain('仅停止进程')
+    expect(button(wrapper, '卸载此版本').exists()).toBe(true)
+    expect(calls.some(c => c.method === 'plugins.purge')).toBe(false)
+  })
+  it('requires exact ID, previews all versions and follows operation ACK and failure stages', async () => {
+    pluginEnabled = false
+    const wrapper = await setup(); await openDisabled(wrapper)
+    await button(wrapper, '彻底移除插件').trigger('click')
+    const dialog = wrapper.get('[role="dialog"]')
+    expect(dialog.text()).toContain('1.0.0'); expect(dialog.text()).toContain('1.1.0')
+    expect(dialog.text()).toContain('配置和业务数据'); expect(dialog.text()).toContain('不可恢复')
+    expect(button(wrapper, '确认操作').attributes('disabled')).toBeDefined()
+    for (const id of ['ECHO-PLUGIN', ' echo-plugin', 'echo-plugin ', 'other-plugin']) {
+      await wrapper.get('#purge-confirm-id').setValue(id)
+      expect(button(wrapper, '确认操作').attributes('disabled')).toBeDefined()
+    }
+    await wrapper.get('#purge-confirm-id').setValue('echo-plugin')
+    expect(button(wrapper, '确认操作').attributes('disabled')).toBeUndefined()
+    await button(wrapper, '确认操作').trigger('click'); await flushPromises()
+    expect(calls.find(c => c.method === 'plugins.purge')!.payload).toEqual({ id: 'echo-plugin', confirm_id: 'echo-plugin', request_key: expect.any(String) })
+    expect(wrapper.text()).toContain('操作已受理')
+    ops = [{ id: 'op-test', method: 'plugins.purge', state: 'failed', stage: 'purging_data', target: 'echo-plugin', result: { status: 'err', code: 'io' } }]
+    await vi.advanceTimersByTimeAsync(2500); await flushPromises()
+    await wrapper.findAll('nav button')[2].trigger('click')
+    expect(wrapper.text()).toContain('删除配置与数据'); expect(wrapper.text()).toContain('io')
+    await wrapper.findAll('nav button')[1].trigger('click')
+    await button(wrapper, '彻底移除插件').trigger('click')
+    expect((wrapper.get('#purge-confirm-id').element as HTMLInputElement).value).toBe('')
+    expect(button(wrapper, '确认操作').attributes('disabled')).toBeDefined()
+  })
+  it('blocks a stale confirmation when enabled elsewhere', async () => {
+    pluginEnabled = false
+    const wrapper = await setup(); await openDisabled(wrapper)
+    await button(wrapper, '彻底移除插件').trigger('click'); await wrapper.get('#purge-confirm-id').setValue(fixtureId)
+    pluginEnabled = true
+    await vi.advanceTimersByTimeAsync(2500); await flushPromises()
+    expect(button(wrapper, '确认操作').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[role="dialog"]').text()).toContain('请取消并先停用')
+    expect(calls.some(c => c.method === 'plugins.purge')).toBe(false)
+  })
+  it('cancels without submission, enforces read-only and warns about CLI reinstall for self-removal', async () => {
+    pluginEnabled = false; fixtureId = 'web-admin'
+    const wrapper = await setup(); await openDisabled(wrapper)
+    await button(wrapper, '彻底移除插件').trigger('click')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('必须通过本机 CLI 重新安装包')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('恢复有效配置并授权启用')
+    await button(wrapper, '取消').trigger('click')
+    expect(calls.some(c => c.method === 'plugins.purge')).toBe(false)
+    readonly = true; await vi.advanceTimersByTimeAsync(2500); await flushPromises()
+    expect(button(wrapper, '彻底移除插件').attributes('disabled')).toBeDefined()
   })
 })

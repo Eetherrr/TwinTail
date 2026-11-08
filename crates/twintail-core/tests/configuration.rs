@@ -13,6 +13,60 @@ fn store(data: &TempDir, package: &TempDir) -> ConfigStore {
 }
 
 #[test]
+fn arbitrary_namespace_uses_private_stable_parent_gate_for_cas_and_open() {
+    use sha2::{Digest, Sha256};
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("arbitrary namespace");
+    let mut config = ConfigStore::open(&directory.join("."), root.path(), None, 1).unwrap();
+    let digest = Sha256::digest(b"arbitrary namespace");
+    let gate = root
+        .path()
+        .join(".config-locks")
+        .join(format!("{digest:x}.lock"));
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&gate)
+        .unwrap();
+    lock.lock().unwrap();
+    assert_eq!(
+        config.update(0, json!({})).unwrap_err().reason,
+        "configuration transaction busy"
+    );
+    assert!(ConfigStore::open(&directory, root.path(), None, 1).is_err());
+    lock.unlock().unwrap();
+    config.update(0, json!({})).unwrap();
+    assert!(directory.join("config.lock").is_file());
+    assert!(gate.is_file());
+}
+
+#[cfg(unix)]
+#[test]
+fn external_gate_rejects_symlink_directory_symlink_file_and_hardlinks() {
+    use sha2::{Digest, Sha256};
+    use std::os::unix::fs::symlink;
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let directory = root.path().join("sample");
+    let locks = root.path().join(".config-locks");
+    symlink(outside.path(), &locks).unwrap();
+    assert!(ConfigStore::open(&directory, root.path(), None, 1).is_err());
+    fs::remove_file(&locks).unwrap();
+    fs::create_dir(&locks).unwrap();
+    let digest = Sha256::digest(b"sample");
+    let gate = locks.join(format!("{digest:x}.lock"));
+    let target = outside.path().join("untouched");
+    fs::write(&target, "fixture").unwrap();
+    symlink(&target, &gate).unwrap();
+    assert!(ConfigStore::open(&directory, root.path(), None, 1).is_err());
+    fs::remove_file(&gate).unwrap();
+    fs::hard_link(&target, &gate).unwrap();
+    assert!(ConfigStore::open(&directory, root.path(), None, 1).is_err());
+    assert_eq!(fs::read_to_string(target).unwrap(), "fixture");
+    assert!(!directory.exists());
+}
+
+#[test]
 fn revisions_prepare_and_restart_preserve_desired_applied_gap() {
     let (data, package) = roots();
     let mut config = store(&data, &package);

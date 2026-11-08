@@ -146,7 +146,7 @@ P3 实际契约：本地目录包按 `id/version` 原子安装，SHA256 检测�
 
 配置更新事务：携带 expected_revision → schema/语义校验 → 插件 prepare（无副作用）→ 同目录临时写入与持久化 → 原子替换 → 发布新修订并通知插件 commit。运行态应用失败时标记 desired_revision 与 applied_revision 不一致并保留错误，触发受控回滚/重启；崩溃恢复以磁盘期望配置为准。不宣称文件与进程间具有跨进程原子事务。并发旧修订返回 Conflict。非法编辑保留最后可用配置并给出字段路径错误。
 
-插件包安装与启用分开；MVP 从本地校验包安装，拒绝目录穿越、越界链接、未知平台和不兼容包。卸载前停进程并解除注册，默认保留配置和业务数据，清除数据必须独立明确操作。操作审计记录主体、时间、目标、前后修订/版本、结果，避免记录明文配置秘密。
+插件包安装与启用分开；MVP 从本地校验包安装，拒绝目录穿越、越界链接、未知平台和不兼容包。卸载前停进程并解除注册，默认保留配置和业务数据。独立 `plugins.purge` 彻底移除要求先停用并以 `confirm_id` 精确确认 ID，删除目标全部版本与 `data/plugins/<id>/`，保留全局审计、外部资源和环境秘密源；按阶段报告非原子删除失败并允许重试，详见 [ADR 0008](docs/architecture/0008-plugin-purge.md)。操作审计记录主体、时间、目标、前后修订/版本、结果，避免记录明文配置秘密。
 
 管理服务至少包括 list/get/status、install-local、enable/disable、reload、config get/validate/update、logs subscribe、health 和 operations get。耗时操作返回 operation_id，状态可查询，支持并发冲突检测；接口幂等键避免浏览器重复点击产生重复重载。Web 管理接口转发这些服务，不复制状态机。
 

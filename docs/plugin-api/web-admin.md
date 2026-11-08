@@ -17,7 +17,7 @@ P5 复用现有版本化 IPC request/response；新命名方法和 capability �
 | 能力 | 固定方法 |
 | --- | --- |
 | management.read | plugins.list、plugins.status、plugins.installed、plugins.inspect、plugins.readme、config.get、config.schema、config.validate、operations.list、operations.get、management.overview、diagnostics.logs、adapter.status |
-| management.write | plugins.install、plugins.enable、plugins.disable、plugins.uninstall、plugins.reload、plugins.start、plugins.stop、config.update |
+| management.write | plugins.install、plugins.enable、plugins.disable、plugins.uninstall、plugins.purge、plugins.reload、plugins.start、plugins.stop、config.update |
 
 `plugins.installed` 使用轻量inventory，返回列表原有元数据并标记 `verified:false`：只对有界receipt与manifest进行结构检查，未对当前包字节重新全量哈希，不是当前完整性证明。安装仍校验来源包，enable/reload仍完整verify；底层PackageStore.list/verify的完整校验语义不变。`plugins.inspect {id,version}` 返回 manifest 与 `verified:false`，供授权前查看声明；这同样不证明当前包字节完整性；没有 `plugins.call` 通用调用桥接。`adapter.status {id}` 仅返回 connected、generation、connection_attempts、pending_actions，不是任意插件方法代理。`config.schema` 返回 schema、snapshot、status；和 config.get 一样，snapshot 只允许在秘密字段中保留原始 `$secret` 环境引用，不返回解析后的秘密。Schema 的 `writeOnly:true` 字段在浏览器读写中必须使用 `{"$secret":"ENV_NAME"}`；web-admin 的 admin_token 与适配器 access_token 均按此标记。若旧配置在这些字段含字面量秘密，Web 管理安全拒绝读取/提交，不返回脱敏占位符。先用本机 CLI 把完整 values 迁移为引用，再继续 Web 管理；不要将占位符当作秘密值写回。组合 Schema 的秘密约束保守合并，不能用另一分支绕过 writeOnly。
 
@@ -34,6 +34,22 @@ P5 复用现有版本化 IPC request/response；新命名方法和 capability �
 读取仅经过 PackageStore 对所选已安装版本的有界manifest/receipt和路径校验；文档必须在安装receipt中，不读取源目录、数据目录或调用者指定路径。读取不对可执行文件或整个包重新哈希，**verified恒为false**：receipt合法不代表当前正文或可执行字节完整，正文可以是被修改的不可信内容。UI 将 Markdown 当作惰性纯文本展示，不执行HTML、脚本或插件前端组件；不把文档内容作为指令。此方法只要求精确 `management.read`，`management.write` 不隐含读取授权，也不会创建操作记录或更改生命周期/配置。
 
 所有桥接写操作包括 web-admin 自停，均先确认接纳并返回 `{id,state}`，再由宿主后台执行。因此响应成功不等于操作完成。自停时 HTTP 仍可能中断，使用 CLI operations list/get 确认，再用 plugins start web-admin 恢复。config.update 沿用 P3 expected_revision CAS，不能通过 Web 绕过修订校验。
+
+### 彻底移除插件（独立危险操作）
+
+`plugins.uninstall {id,version}` 仅卸载一个版本并保留配置、业务数据。独立的 `plugins.purge` 使用精确 `management.write` 权限，删除该 ID 的**全部已安装版本**及 `data/plugins/<id>/` 中的配置和私有数据，删除后不可恢复。插件创建的外部数据库、远程资源、宿主审计与操作记录不在清理范围。
+
+```json
+{"method":"plugins.purge","payload":{"id":"echo-plugin","confirm_id":"echo-plugin","request_key":"purge-echo-001"}}
+```
+
+`confirm_id` 必须与 `id` 完全相同，不接受大小写转换、前后空格或其他 ID。必须先执行 `plugins.disable` 并确认操作完成；仅 `plugins.stop` 或进程处于 stopped/failed 不代表已停用。此操作不自动停用插件或级联处理依赖。
+
+UI 在插件详情提供与“卸载此版本”分开的“彻底移除插件”危险区域。仍在已启用列表中的插件禁用该按钮并提示先停用。确认框展示全部已安装版本、配置与数据不可恢复说明，并要求手动输入精确插件 ID；取消、只读权限或 ID 不匹配时均不提交。
+
+返回 `result:{id,state}` 为操作 ACK，不是删除完成。继续用 `operations.get {id:操作ID}` 或操作记录页查看终态和 `stage`。删除是**非原子操作**：失败或中断可能已删除部分版本/数据，不自动回滚；检查失败阶段、修复原因后，可再次明确确认并提交。响应丢失时先查 `operations.list/get`；同一请求重试保留原 `request_key`，已经终止的失败操作修复后重新发起应使用新的 key。
+
+**web-admin 自移除**：先停用会中断 Web 管理连接，因此实际移除与结果查询需保留本机 CLI 入口。彻底删除后，`plugins start web-admin` 不能恢复已删除的包和配置；应通过 CLI 重新安装版本包，按首次安装步骤恢复有效配置/环境秘密引用，然后明确授予管理能力并启用。UI 自移除确认框也明确展示此恢复警告。
 
 ## 安装与日常操作
 

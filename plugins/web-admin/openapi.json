@@ -145,6 +145,27 @@
         ],
         "type": "object"
       },
+      "PluginPurgeRequest": {
+        "description": "plugins.purge (management.write): first disable the plugin, even if its process is stopped/failed. Irreversibly deletes every installed version and data/plugins/<id> including configuration/private data. External resources and audit records remain. Non-atomic: failure can leave partial deletion; inspect Operation.stage and retry after fixing the cause. ACK is admission only, poll operations.get. For web-admin, prepare local CLI reinstall/config restoration/enable recovery before disabling it.",
+        "properties": {
+          "confirm_id": {
+            "description": "Must exactly equal id, without trimming or case folding.",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "request_key": {
+            "pattern": "^[a-zA-Z0-9._-]{1,128}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "confirm_id"
+        ],
+        "type": "object"
+      },
       "PluginReadme": {
         "additionalProperties": false,
         "description": "plugins.readme result: first README.md then README. Missing both succeeds with filename/content null. Metadata/path validation only, no full package hash; content may be modified and is untrusted. Invalid UTF-8, oversize, unsafe paths/links or invalid installed metadata return invalid_config (HTTP 400).",
@@ -230,7 +251,7 @@
   "paths": {
     "/api/v1/manage": {
       "post": {
-        "description": "Read capability: management.overview, plugins.list/status/installed/inspect/readme, operations.list/get, config.get/schema/validate, diagnostics.logs, adapter.status. Write capability: plugins.install/enable/disable/uninstall/reload/start/stop and config.update. Read-only grants receive 403 on writes. Targeted calls use payload.id; operations.get uses operation id. Config input uses unresolved values, never resolved secrets. Lifecycle/config mutations immediately return result OperationAck: poll operations.get until completed/failed/interrupted. A 504 or lost response does not prove mutation failure; use operations.list and the same request_key rather than blindly retrying. Results and payloads vary by method.",
+        "description": "Read capability: management.overview, plugins.list/status/installed/inspect/readme, operations.list/get, config.get/schema/validate, diagnostics.logs, adapter.status. Write capability: plugins.install/enable/disable/uninstall/purge/reload/start/stop and config.update. Read-only grants receive 403 on writes. Targeted calls use payload.id; operations.get uses operation id. Config input uses unresolved values, never resolved secrets. Lifecycle/config mutations immediately return result OperationAck: poll operations.get until completed/failed/interrupted. A 504 or lost response does not prove mutation failure; use operations.list and the same request_key rather than blindly retrying. Results and payloads vary by method.",
         "parameters": [
           {
             "description": "Exact http://bound-loopback-IP:port; forwarded origins and localhost aliases rejected",
@@ -275,6 +296,25 @@
                         }
                       }
                     }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "method": {
+                          "const": "plugins.purge"
+                        }
+                      },
+                      "required": [
+                        "method"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "payload": {
+                          "$ref": "#/components/schemas/PluginPurgeRequest"
+                        }
+                      }
+                    }
                   }
                 ],
                 "properties": {
@@ -297,6 +337,7 @@
                       "plugins.enable",
                       "plugins.disable",
                       "plugins.uninstall",
+                      "plugins.purge",
                       "plugins.reload",
                       "plugins.start",
                       "plugins.stop",
@@ -306,8 +347,11 @@
                     "type": "string"
                   },
                   "payload": {
-                    "description": "Method-specific payload: id selects plugin/operation. Install uses path; enable uses id, optional version and grants. Mutations accept optional request_key (1..128 ASCII alphanumeric/dot/underscore/hyphen) for idempotency; same key with changed payload or actor conflicts. config.validate/update use values; update additionally requires expected_revision. plugin reload may select candidate version. plugins.readme requires id and version; see PluginReadmeRequest/PluginReadme. See ConfigMutation and Operation schemas.",
+                    "description": "Method-specific payload: id selects plugin/operation. Install uses path; enable uses id, optional version and grants. Mutations accept optional request_key (1..128 ASCII alphanumeric/dot/underscore/hyphen) for idempotency; same key with changed payload or actor conflicts. config.validate/update use values; update additionally requires expected_revision. plugin reload may select candidate version. plugins.readme requires id and version; see PluginReadmeRequest/PluginReadme. plugins.purge requires id and confirm_id exactly matching id; first disable the plugin. See PluginPurgeRequest, ConfigMutation and Operation schemas.",
                     "properties": {
+                      "confirm_id": {
+                        "type": "string"
+                      },
                       "expected_revision": {
                         "minimum": 0,
                         "type": "integer"

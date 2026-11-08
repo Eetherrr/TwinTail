@@ -17,6 +17,7 @@ P2 新增 `twintail-plugin-sdk`、BotRef、有界事件/动作/服务路由，�
 | [ADR 0005：P4 OneBot 与 SnowLuma](0005-p4-onebot-snowluma.md) | 正向 Universal WS、无损类型、有界连接和未知结果 |
 | [ADR 0006：P5 Web 管理](0006-p5-web-admin.md) | 独立HTTP插件、授权桥接、会话与CLI恢复 |
 | [ADR 0007：P6 发布加固](0007-p6-release-hardening.md) | 反向 Universal WS、候选打包、冷备份与负载验证（实施中） |
+| [ADR 0008：彻底移除插件](0008-plugin-purge.md) | 显式确认、全版本与私有数据删除、失败阶段与重试边界 |
 | [适配器指南](../plugin-api/adapters.md) | 构建、打包、配置、启用与连接诊断 |
 | [插件 API](../plugin-api/README.md) | 当前实际 wire、清单、权限、生命周期和排障 |
 | [安全边界](security.md) | 当前已有控制与未覆盖的信任边界 |

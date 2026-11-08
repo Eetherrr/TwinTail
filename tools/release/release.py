@@ -32,7 +32,7 @@ PLUGINS = {
     "mock-adapter": "examples/mock-adapter",
 }
 API_DOCS = "contract-tools README manifest errors events configuration storage quickstart actions web-admin migration hot-reload lifecycle adapters protocol permissions troubleshooting services".split()
-ARCH_DOCS = "README 0001-p0-baseline 0002-p1-plugin-host 0003-p2-sdk-routing 0004-p3-management-config-reload 0005-p4-onebot-snowluma 0006-p5-web-admin 0007-p6-release-hardening security".split()
+ARCH_DOCS = "README 0001-p0-baseline 0002-p1-plugin-host 0003-p2-sdk-routing 0004-p3-management-config-reload 0005-p4-onebot-snowluma 0006-p5-web-admin 0007-p6-release-hardening 0008-plugin-purge security".split()
 SCHEMAS = "protocol initialize plugin-manifest config-prepare action-call service-call hello service-registration config-commit bot-ref delivery-report register-bot management-call host-config config-snapshot event-envelope subscribe publish-event".split()
 DOCUMENTS = ["README.md", "AGENT.md", "SKILL.md", "CHANGELOG.md", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "web/package.json", "web/package-lock.json", "plugins/web-admin/openapi.json"] + [f"docs/plugin-api/{name}.md" for name in API_DOCS] + [f"docs/architecture/{name}.md" for name in ARCH_DOCS] + ["docs/compatibility/README.md", "docs/compatibility/snowluma.md"] + [f"schemas/{name}-v1.json" for name in SCHEMAS]
 MAX_README = 128 * 1024

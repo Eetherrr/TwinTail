@@ -284,7 +284,9 @@ impl Controller {
         for operation in &mut operations {
             if matches!(operation["state"].as_str(), Some("running" | "pending")) {
                 operation["state"] = json!("interrupted");
-                operation["stage"] = json!("interrupted");
+                if operation["method"] != "plugins.purge" {
+                    operation["stage"] = json!("interrupted");
+                }
                 operation["result"] = json!({"status":"interrupted","needs_recovery":true});
             }
         }
@@ -442,7 +444,10 @@ impl Controller {
                 ),
             };
             op["state"] = json!(state);
-            op["stage"] = json!(state);
+            // Purge errors retain the last destructive/preflight stage for recovery.
+            if op["method"] != "plugins.purge" || state == "completed" {
+                op["stage"] = json!(state);
+            }
             op["result"] = summary;
         }
         drop(view);
@@ -633,6 +638,62 @@ impl Controller {
                     return Err(e);
                 }
                 Ok(json!({"id":id,"state":"disabled"}))
+            }
+            "plugins.purge" => {
+                if field(&payload, "confirm_id")? != id {
+                    return Err(error(
+                        ErrorCode::InvalidRequest,
+                        "purge confirmation must match plugin id",
+                    ));
+                }
+                // Enabled includes stopped/failed specs. Never mutate the plan or
+                // automatically disable here: that would combine two transactions.
+                if self.supervisor.spec(&id).is_some()
+                    || self.plan.plugins.iter().any(|entry| {
+                        entry
+                            .path
+                            .components()
+                            .next()
+                            .is_some_and(|part| part.as_os_str() == std::ffi::OsStr::new(&id))
+                    })
+                    || self
+                        .specs()
+                        .iter()
+                        .any(|spec| spec.manifest.dependencies.contains_key(&id))
+                {
+                    return Err(error(
+                        ErrorCode::Conflict,
+                        "purge requires a disabled plugin without dependants",
+                    ));
+                }
+                self.stage(operation, "preflighting_purge")?;
+                let packages = self.packages.clone();
+                let data = self.data.clone();
+                let shared = self.shared.clone();
+                let operation = operation.to_owned();
+                let remove_id = id.clone();
+                tokio::task::spawn_blocking(move || {
+                    let purge = packages.prepare_purge(&remove_id, &data)?;
+                    let stage = |stage: &str| -> Result<()> {
+                        if let Some(op) = shared
+                            .lock()
+                            .unwrap()
+                            .operations
+                            .iter_mut()
+                            .find(|op| op["id"] == operation)
+                        {
+                            op["stage"] = json!(stage);
+                        }
+                        persist_journal(&data, &shared)
+                    };
+                    stage("purging_packages")?;
+                    purge.remove_packages()?;
+                    stage("purging_data")?;
+                    purge.remove_data()
+                })
+                .await
+                .map_err(disk)??;
+                Ok(json!({"id":id,"state":"purged"}))
             }
             "plugins.uninstall" => {
                 let version = field(&payload, "version")?;
@@ -956,7 +1017,16 @@ impl Controller {
                 result = loop {
                     tokio::select! {
                         biased;
-                        _ = shutdown.changed() => { interrupted = true; break Err(error(ErrorCode::Cancelled,"host shutdown interrupted operation")); },
+                        _ = shutdown.changed() => {
+                            interrupted = true;
+                            // A started spawn_blocking purge cannot be aborted by
+                            // dropping its JoinHandle. Join it before publishing a
+                            // terminal journal record or shutting down the host.
+                            if method == "plugins.purge" {
+                                break (&mut future).await;
+                            }
+                            break Err(error(ErrorCode::Cancelled,"host shutdown interrupted operation"));
+                        },
                         value = &mut future => break value,
                         Some(call) = receive(&mut calls, &mut bridge) => {
                             match if call.reply.active() { decode(call.request) } else { Err(error(ErrorCode::Cancelled,"management caller is no longer active")) } {
@@ -1048,6 +1118,7 @@ fn is_mutation(method: &str) -> bool {
             | "plugins.enable"
             | "plugins.disable"
             | "plugins.uninstall"
+            | "plugins.purge"
             | "plugins.reload"
             | "plugins.start"
             | "plugins.stop"

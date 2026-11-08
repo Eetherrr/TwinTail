@@ -9,6 +9,7 @@ Usage: twintail-host [--check|--validate] [--data-dir PATH] [--install-dir PATH]
        twintail-host plugins install PATH
        twintail-host plugins enable ID VERSION GRANTS_JSON
        twintail-host plugins disable ID|uninstall ID VERSION|reload ID VERSION
+       twintail-host plugins purge ID --confirm ID
        twintail-host config get ID|validate ID JSON|update ID EXPECTED_REVISION JSON
        twintail-host operations list|get ID
        twintail-host --help|--version
@@ -74,6 +75,17 @@ pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command,
                 | ("config", "get")
                 | ("operations", "get") => {
                     payload["id"] = Value::String(text(&mut args, "action requires an ID")?);
+                }
+                ("plugins", "purge") => {
+                    let id = text(&mut args, "purge requires a plugin ID")?;
+                    if args.next().as_deref() != Some(std::ffi::OsStr::new("--confirm")) {
+                        return Err("purge requires --confirm ID".into());
+                    }
+                    let confirm = text(&mut args, "purge requires --confirm ID")?;
+                    if confirm != id {
+                        return Err("purge confirmation must match plugin ID".into());
+                    }
+                    payload = json!({"id":id,"confirm_id":confirm});
                 }
                 ("plugins", "enable" | "reload" | "uninstall") => {
                     payload["id"] = Value::String(text(&mut args, "action requires a plugin ID")?);

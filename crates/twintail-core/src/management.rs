@@ -67,9 +67,8 @@ pub(crate) fn capability(method: &str, payload: &Value) -> Result<&'static str, 
         | "diagnostics.logs"
         | "adapter.status" => Ok("management.read"),
         "plugins.install" | "plugins.enable" | "plugins.disable" | "plugins.uninstall"
-        | "plugins.reload" | "plugins.start" | "plugins.stop" | "config.update" => {
-            Ok("management.write")
-        }
+        | "plugins.purge" | "plugins.reload" | "plugins.start" | "plugins.stop"
+        | "config.update" => Ok("management.write"),
         _ => Err(RpcError::new(
             ErrorCode::PermissionDenied,
             "management method is not permitted through plugin bridge",
@@ -107,6 +106,7 @@ mod tests {
             "plugins.enable",
             "plugins.disable",
             "plugins.uninstall",
+            "plugins.purge",
             "plugins.reload",
             "plugins.start",
             "plugins.stop",

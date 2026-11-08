@@ -30,6 +30,7 @@ impl Management for Backend {
                 .unwrap()
                 .push((method.clone(), payload.clone()));
             match method.as_str() {
+                "plugins.purge" => Ok(json!({"id":"purge-operation","state":"running"})),
                 "slow" => {
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     Ok(json!({}))
@@ -104,6 +105,41 @@ fn authenticated(
         .insert("x-csrf-token", csrf.parse().unwrap());
     request
 }
+#[tokio::test]
+async fn purge_forwards_confirmation_and_returns_operation_ack_after_boundary_checks() {
+    let (app, backend) = setup(config());
+    let (cookie, csrf) = login(&app).await;
+    let payload =
+        json!({"id":"echo-plugin","confirm_id":"echo-plugin","request_key":"purge-echo-001"});
+    let body = json!({"method":"plugins.purge","payload":payload});
+    let mut missing_csrf = authenticated("POST", "/api/v1/manage", body.clone(), &cookie, &csrf);
+    missing_csrf.headers_mut().remove("x-csrf-token");
+    assert_eq!(
+        app.clone().oneshot(missing_csrf).await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+    assert!(backend.calls.lock().unwrap().is_empty());
+    let response = app
+        .oneshot(authenticated(
+            "POST",
+            "/api/v1/manage",
+            body,
+            &cookie,
+            &csrf,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        data(response).await,
+        json!({"result":{"id":"purge-operation","state":"running"}})
+    );
+    assert_eq!(
+        *backend.calls.lock().unwrap(),
+        vec![("plugins.purge".to_string(), payload)]
+    );
+}
+
 #[tokio::test]
 async fn session_csrf_host_origin_and_revocation() {
     let (app, backend) = setup(config());
@@ -470,6 +506,45 @@ fn readme_openapi_has_exact_method_and_inert_bounded_contract() {
         json!(["README.md", "README", null])
     );
     assert_eq!(result["properties"]["content"]["maxLength"], 131072);
+}
+
+#[test]
+fn purge_openapi_has_exact_method_confirmation_and_operation_contract() {
+    let api = web_admin::openapi();
+    let request = &api["paths"]["/api/v1/manage"]["post"]["requestBody"]["content"]["application/json"]
+        ["schema"];
+    let methods = request["properties"]["method"]["enum"].as_array().unwrap();
+    assert_eq!(
+        methods
+            .iter()
+            .filter(|method| **method == json!("plugins.purge"))
+            .count(),
+        1
+    );
+    assert!(!methods.contains(&json!("plugins.purge.extra")));
+    assert_eq!(
+        request["allOf"][1]["if"]["properties"]["method"]["const"],
+        "plugins.purge"
+    );
+    assert_eq!(
+        request["allOf"][1]["then"]["properties"]["payload"]["$ref"],
+        "#/components/schemas/PluginPurgeRequest"
+    );
+    let payload = &api["components"]["schemas"]["PluginPurgeRequest"];
+    assert_eq!(payload["required"], json!(["id", "confirm_id"]));
+    assert_eq!(payload["properties"]["confirm_id"]["type"], "string");
+    let description = payload["description"].as_str().unwrap();
+    for expected in [
+        "management.write",
+        "first disable",
+        "Non-atomic",
+        "Operation.stage",
+        "poll operations.get",
+        "External resources and audit records remain",
+        "CLI",
+    ] {
+        assert!(description.contains(expected), "missing {expected}");
+    }
 }
 
 #[test]

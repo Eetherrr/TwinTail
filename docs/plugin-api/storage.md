@@ -22,4 +22,18 @@ twintail-host plugins disable example-plugin --data-dir ./data
 twintail-host plugins uninstall example-plugin 1.0.0 --data-dir ./data
 ```
 
+## 彻底移除插件
+
+`plugins uninstall ID VERSION` 仅卸载版本并保留配置数据。新增独立 `plugins purge ID --confirm ID`：必须先 `plugins disable ID` 并等待终态，然后删除安装根下该 ID 的所有版本与 `data/plugins/ID/` 的配置、已应用快照和业务数据。确认值须与 ID 完全相同，已启用（即使 stopped/failed）仍返回 Conflict；启用中的强依赖者须先处理，不自动级联；未启用包的依赖声明不阻止移除。
+
+```sh
+twintail-host plugins disable example-plugin --data-dir ./data
+# 查询上一步 operation_id，确认成功后再执行：
+twintail-host plugins purge example-plugin --confirm example-plugin --data-dir ./data
+```
+
+本机管理与 Web HTTP 管理使用 `plugins.purge`、payload `{ "id": "example-plugin", "confirm_id": "example-plugin" }`；Web 插件须精确获授 `management.write`。WebUI 独立危险按钮要求输入 ID，并提示所有版本和数据将永久删除。没有备份则不支持恢复；环境变量中的秘密源、全局操作日志、其他插件和插件自行写出的目录外文件/远端资源不在删除范围。
+
+操作沿用异步 ACK，通过 operations get 查询实际阶段：`preflighting_purge`、`purging_packages`、`purging_data`。预检拒绝危险链接与路径，但实际删除非原子，IO 或权限变化仍可能造成部分完成；失败不得当作成功，修复原因后可重试，已不存在的目标目录按幂等清理处理。配置 CAS 与移除共享父目录 `.config-locks/` 下按命名空间名 SHA256 命名的稳定锁，作为宿主互斥元数据保留，不包含配置或业务内容；内部 `config.lock` 继续兼容旧锁检查。移除持外部门闩将数据目录退役到 `.purge-ID` 后删除，残留退役目录在重试时一并预检清理。升级时先停止旧版宿主和独立配置写入者，新旧进程并发不属于本次跨版本锁协议保证。正常关闭等待已启动删除收束后再记录终态，强制杀进程仍可能留下部分状态。不要运行插件提供的卸载脚本来替代宿主目录清理。设计见 [ADR 0008](../architecture/0008-plugin-purge.md)。
+
 P3 变更命令返回 running operation，使用 `twintail-host operations get OPERATION_ID --data-dir ./data` 确认终态，再执行依赖前一步结果的操作。enable 的 grants 是 JSON 字符串数组；能力必须由清单声明并获宿主批准。语法已按当前 CLI 源码核对，不能将上面的顺序理解为自动等待整批完成。参阅[清单](manifest.md)、[配置](configuration.md)与[热重载](hot-reload.md)。

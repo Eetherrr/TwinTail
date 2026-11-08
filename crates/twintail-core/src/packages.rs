@@ -252,7 +252,211 @@ fn bounded(path: &Path, limit: u64) -> Result<Vec<u8>, RpcError> {
     Ok(bytes)
 }
 
+/// Preflighted destructive removal, holding the package writer and config CAS locks.
+///
+/// The host must first reject enabled targets and dependants. Both trees are
+/// checked before removal starts. Removal is retryable, not atomic: an I/O failure
+/// may leave a partially removed tree. Roots must remain administrator-controlled;
+/// standard filesystem APIs do not prevent hostile same-user replacement races.
+pub struct PluginPurge {
+    _packages: Lock,
+    _namespace: fs::File,
+    config: std::sync::Mutex<Vec<fs::File>>,
+    packages: Vec<PathBuf>,
+    data: Vec<PathBuf>,
+    retired: Vec<PathBuf>,
+    data_path: PathBuf,
+    retired_path: PathBuf,
+}
+
+fn writable_purge_directory(metadata: &fs::Metadata) -> Result<(), RpcError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        // Catch obvious permission failures in the full preflight. ACLs, mounts,
+        // handles and external mutations can still fail later; this is not atomic.
+        if metadata.mode() & 0o222 == 0 || metadata.mode() & 0o111 == 0 {
+            return Err(invalid("purge directory is not writable"));
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = metadata;
+    Ok(())
+}
+
+fn purge_tree(root: &Path) -> Result<Vec<PathBuf>, RpcError> {
+    // Missing roots are successful, but existing ancestors must still be safe.
+    for ancestor in root.ancestors() {
+        match fs::symlink_metadata(ancestor) {
+            Ok(_) => reject_links(ancestor)?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(io(e)),
+        }
+        break;
+    }
+    match fs::symlink_metadata(root) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(io(e)),
+        Ok(meta) if !meta.is_dir() => return Err(invalid("purge target must be a directory")),
+        Ok(_) => {}
+    }
+    if let Some(parent) = root.parent() {
+        writable_purge_directory(&fs::symlink_metadata(parent).map_err(io)?)?;
+    }
+    let mut paths = Vec::new();
+    let mut pending = vec![root.to_owned()];
+    while let Some(path) = pending.pop() {
+        if paths.len() >= 1_000_000
+            || path
+                .strip_prefix(root)
+                .map_err(|_| invalid("unsafe purge path"))?
+                .components()
+                .count()
+                > 128
+        {
+            return Err(invalid("purge tree exceeds traversal limits"));
+        }
+        reject_links(&path)?;
+        let metadata = fs::symlink_metadata(&path).map_err(io)?;
+        if metadata.is_dir() {
+            writable_purge_directory(&metadata)?;
+            for entry in fs::read_dir(&path).map_err(io)? {
+                if paths.len() + pending.len() >= 1_000_000 {
+                    return Err(invalid("purge tree exceeds traversal limits"));
+                }
+                pending.push(entry.map_err(io)?.path());
+            }
+        } else {
+            regular_file(&metadata)?;
+            #[cfg(windows)]
+            if metadata.permissions().readonly() {
+                return Err(invalid("purge contains a read-only file"));
+            }
+        }
+        paths.push(path);
+    }
+    Ok(paths)
+}
+
+fn remove_purge_tree(paths: &[PathBuf]) -> Result<(), RpcError> {
+    for path in paths.iter().rev() {
+        // Recheck before every deletion; never follow observed links or reparse points.
+        let metadata = match fs::symlink_metadata(path) {
+            Ok(metadata) => metadata,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(io(e)),
+        };
+        reject_links(path)?;
+        if metadata.is_dir() {
+            fs::remove_dir(path).map_err(io)?;
+        } else {
+            regular_file(&metadata)?;
+            fs::remove_file(path).map_err(io)?;
+        }
+    }
+    Ok(())
+}
+
+impl PluginPurge {
+    /// Remove every package version for the target, preserving other identities.
+    /// # Errors
+    /// Returns a safe filesystem/validation error; partial removal is possible.
+    pub fn remove_packages(&self) -> Result<(), RpcError> {
+        remove_purge_tree(&self.packages)
+    }
+    /// Remove the complete plugin namespace, including configuration and data.
+    /// # Errors
+    /// Returns a safe filesystem/validation error; partial removal is possible.
+    pub fn remove_data(&self) -> Result<(), RpcError> {
+        // Windows denies renaming a directory containing our open config.lock.
+        // Keep the stable external gate throughout closing, rename and deletion.
+        self.config
+            .lock()
+            .map_err(|_| invalid("purge lock state failed"))?
+            .clear();
+        remove_purge_tree(&self.retired)?;
+        if self.data.is_empty() {
+            return Ok(());
+        }
+        // Retire under the stable gate. A ConfigStore using the original path
+        // fails instead of rebuilding it; new opens also contend on this gate.
+        // The fixed hidden path is preflighted on retry.
+        reject_links(&self.data_path)?;
+        if fs::symlink_metadata(&self.retired_path).is_ok() {
+            return Err(RpcError::new(
+                ErrorCode::Conflict,
+                "purge retirement path is busy",
+            ));
+        }
+        fs::rename(&self.data_path, &self.retired_path).map_err(io)?;
+        let retired = self
+            .data
+            .iter()
+            .map(|path| {
+                path.strip_prefix(&self.data_path)
+                    .map(|relative| self.retired_path.join(relative))
+                    .map_err(|_| invalid("unsafe purge path"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        remove_purge_tree(&retired)
+    }
+}
+
 impl PackageStore {
+    /// Preflight all versions and the complete `data_root/plugins/id` namespace.
+    /// Missing targets succeed. Rejects traversal, links (including hard links),
+    /// Windows reparse points, special files and overlapping roots before deleting
+    /// any content. The guard holds the package lock, a stable external namespace
+    /// gate, and legacy config locks. Data is retired to `data_root/plugins/.purge-id`
+    /// after closing inner config handles, while retaining the external gate.
+    /// CAS writers never acquire a replacement lock during deletion. An interrupted
+    /// retirement is preflighted and removed by the next call for the same id.
+    /// # Errors
+    /// Returns `Conflict` for busy locks, or safe validation/filesystem errors.
+    pub fn prepare_purge(
+        &self,
+        id: &str,
+        data_root: impl AsRef<Path>,
+    ) -> Result<PluginPurge, RpcError> {
+        let package_path = self.location(id, "0.0.0")?.parent().unwrap().to_owned();
+        let data_root = absolute(data_root.as_ref())?;
+        let data_path = data_root.join("plugins").join(id);
+        // Leading dot is excluded by the plugin-id grammar, so this never aliases
+        // a second plugin's namespace.
+        let retired_path = data_root.join("plugins").join(format!(".purge-{id}"));
+        if self.root.starts_with(&data_path)
+            || data_path.starts_with(&self.root)
+            || self.root.starts_with(&retired_path)
+            || retired_path.starts_with(&self.root)
+            || package_path.starts_with(&data_root)
+            || data_root.starts_with(&package_path)
+        {
+            return Err(invalid("purge roots overlap"));
+        }
+        let packages_lock = self.lock()?;
+        let namespace = crate::config::lock_namespace(&data_path).map_err(RpcError::from)?;
+        let packages = purge_tree(&package_path)?;
+        let mut data = purge_tree(&data_path)?;
+        let mut retired = purge_tree(&retired_path)?;
+        let mut config_locks = Vec::new();
+        for (path, tree) in [(&data_path, &mut data), (&retired_path, &mut retired)] {
+            if !tree.is_empty() {
+                config_locks.push(crate::config::lock_directory(path).map_err(RpcError::from)?);
+                // Acquiring the existing CAS lock may have created config.lock.
+                *tree = purge_tree(path)?;
+            }
+        }
+        Ok(PluginPurge {
+            _packages: packages_lock,
+            _namespace: namespace,
+            config: std::sync::Mutex::new(config_locks),
+            packages,
+            data,
+            retired,
+            data_path,
+            retired_path,
+        })
+    }
     /// Create/open a package root, rejecting symlink ancestors and non-directories.
     /// # Errors
     /// Returns `InvalidConfig` for unsafe roots or filesystem failures.
@@ -287,9 +491,8 @@ impl PackageStore {
             Ok(file) => file,
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                 let metadata = fs::symlink_metadata(&path).map_err(io)?;
-                if !metadata.is_file() || metadata.file_type().is_symlink() {
-                    return Err(invalid("unsafe package lock file"));
-                }
+                reject_links(&path)?;
+                regular_file(&metadata)?;
                 fs::OpenOptions::new()
                     .read(true)
                     .write(true)
