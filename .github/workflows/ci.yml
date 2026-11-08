@@ -37,7 +37,26 @@ jobs:
       - name: Build host and plugin examples
         run: cargo build -p twintail-host -p echo-plugin -p mock-adapter -p adapter-snowluma -p web-admin --locked
       - name: Tests
-        run: cargo test --workspace --locked --no-fail-fast
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --workspace --locked --no-fail-fast 2>&1 | tee "$RUNNER_TEMP/cargo-tests.log"
+      - name: Publish test failure diagnostics
+        if: failure()
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          log = Path(os.environ['RUNNER_TEMP']) / 'cargo-tests.log'
+          if log.exists():
+              lines = log.read_text(encoding='utf-8', errors='replace').splitlines()
+              for index, line in enumerate(lines):
+                  if 'panicked at' in line or line.startswith('error: test failed'):
+                      detail = '\n'.join(lines[index:index + 10])
+                      detail = detail.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+                      print(f'::error title=Rust test failure::{detail}')
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+                  summary.write('## Cargo test diagnostics\n\n```text\n' + '\n'.join(lines[-200:]) + '\n```\n')
       - name: Linux adapter CLI smoke
         if: runner.os == 'Linux'
         run: TWINTAIL_HOST_BIN="$GITHUB_WORKSPACE/target/debug/twintail-host" cargo test -p adapter-snowluma --test cli_p4 --locked -- --ignored
