@@ -123,6 +123,74 @@ fn unsafe_ids_overlap_and_config_cas_lock_are_rejected_before_deletion() {
     purge.remove_data().unwrap();
 }
 #[test]
+fn missing_overlapping_data_descendants_are_rejected_without_creation() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = PackageStore::new(temp.path().join("packages")).unwrap();
+    let missing = temp.path().join("packages/sample/missing/data");
+    let error = store.prepare_purge("sample", &missing).err().unwrap();
+    assert_eq!(error.message, "purge roots overlap");
+    assert!(!temp.path().join("packages/sample").exists());
+    assert!(!temp.path().join("packages/.package-store.lock").exists());
+}
+
+#[cfg(windows)]
+#[test]
+fn ordinary_and_verbatim_data_roots_reject_all_overlap_directions() {
+    use std::path::{Component, PathBuf, Prefix};
+
+    let temp = tempfile::tempdir().unwrap();
+    let canonical = fs::canonicalize(temp.path()).unwrap();
+    let mut components = canonical.components();
+    let ordinary = match components.next().unwrap() {
+        Component::Prefix(prefix) => match prefix.kind() {
+            Prefix::VerbatimDisk(drive) => {
+                let mut path = PathBuf::from(format!("{}:", char::from(drive)));
+                for component in components {
+                    path.push(component);
+                }
+                path
+            }
+            Prefix::VerbatimUNC(server, share) => {
+                let mut path = PathBuf::from(r"\\");
+                path.push(server);
+                path.push(share);
+                for component in components {
+                    path.push(component);
+                }
+                path
+            }
+            _ => panic!("expected a canonical Windows disk or UNC path"),
+        },
+        _ => panic!("expected a canonical Windows prefix"),
+    };
+    assert_ne!(ordinary, canonical);
+    let store = fixture(&ordinary);
+    for root in [&ordinary, &canonical] {
+        for suffix in ["packages/sample", "packages/sample/missing/data"] {
+            let error = store
+                .prepare_purge("sample", root.join(suffix))
+                .err()
+                .unwrap();
+            assert_eq!(error.message, "purge roots overlap");
+        }
+        for namespace in ["sample", ".purge-sample"] {
+            let store_root = root.join("data/plugins").join(namespace).join("packages");
+            let overlapping = PackageStore::new(&store_root).unwrap();
+            let error = overlapping
+                .prepare_purge("sample", root.join("data"))
+                .err()
+                .unwrap();
+            assert_eq!(error.message, "purge roots overlap");
+            assert!(!store_root.join(".package-store.lock").exists());
+        }
+    }
+    assert!(!ordinary.join("packages/sample/missing").exists());
+    assert!(!ordinary.join("packages/.package-store.lock").exists());
+    assert!(!ordinary.join("data/plugins/.config-locks").exists());
+    assert!(ordinary.join("packages/sample/1.0.0/binary").is_file());
+}
+
+#[test]
 fn interrupted_retirement_is_recovered_and_stale_config_store_does_not_recreate_namespace() {
     let temp = tempfile::tempdir().unwrap();
     let store = fixture(temp.path());
@@ -313,11 +381,17 @@ fn nested_links_hardlinks_and_link_ancestors_fail_full_preflight() {
     );
     fs::remove_file(temp.path().join("data/plugins/sample/data/hard")).unwrap();
     symlink(temp.path().join("data"), temp.path().join("alias")).unwrap();
-    assert!(
-        store
-            .prepare_purge("missing", temp.path().join("alias"))
-            .is_err()
-    );
+    for suffix in ["alias", "alias/missing/descendant"] {
+        let error = store
+            .prepare_purge("missing", temp.path().join(suffix))
+            .err()
+            .unwrap();
+        assert_eq!(
+            error.message,
+            "symbolic links are forbidden in package paths"
+        );
+    }
+    assert!(!temp.path().join("data/missing").exists());
     assert_eq!(
         fs::read_to_string(outside.join("keep")).unwrap(),
         "untouched"
@@ -348,6 +422,26 @@ fn junction_is_rejected_before_any_package_removal() {
     );
     assert!(temp.path().join("packages/sample/1.0.0/binary").is_file());
     fs::remove_dir(&junction).unwrap();
+    let alias = temp.path().join("alias");
+    assert!(
+        std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(&alias)
+            .arg(&outside)
+            .status()
+            .unwrap()
+            .success()
+    );
+    for data_root in [alias.clone(), alias.join("missing/descendant")] {
+        let error = store.prepare_purge("sample", data_root).err().unwrap();
+        assert_eq!(
+            error.message,
+            "reparse points are forbidden in package paths"
+        );
+    }
+    assert!(!outside.join("missing").exists());
+    assert!(!outside.join("plugins").exists());
+    fs::remove_dir(alias).unwrap();
     assert_eq!(
         fs::read_to_string(outside.join("keep")).unwrap(),
         "untouched"

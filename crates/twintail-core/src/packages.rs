@@ -100,6 +100,28 @@ fn absolute(path: &Path) -> Result<PathBuf, RpcError> {
     }
     Ok(path)
 }
+// Resolve the existing portion only: purge must compare canonical roots (including
+// Windows verbatim prefixes) without creating missing data directories. Inspect
+// the original ancestors first so canonicalization cannot hide links/reparse points.
+fn canonical_purge_root(path: &Path) -> Result<PathBuf, RpcError> {
+    let path = absolute(path)?;
+    for ancestor in path.ancestors() {
+        match fs::symlink_metadata(ancestor) {
+            Ok(_) => {
+                reject_links(ancestor)?;
+                let mut canonical = fs::canonicalize(ancestor).map_err(io)?;
+                canonical.push(
+                    path.strip_prefix(ancestor)
+                        .map_err(|_| invalid("unsafe purge path"))?,
+                );
+                return Ok(canonical);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(io(e)),
+        }
+    }
+    Err(invalid("purge root has no existing ancestor"))
+}
 fn inventory(root: &Path) -> Result<BTreeMap<String, String>, RpcError> {
     fn walk(
         root: &Path,
@@ -419,7 +441,7 @@ impl PackageStore {
         data_root: impl AsRef<Path>,
     ) -> Result<PluginPurge, RpcError> {
         let package_path = self.location(id, "0.0.0")?.parent().unwrap().to_owned();
-        let data_root = absolute(data_root.as_ref())?;
+        let data_root = canonical_purge_root(data_root.as_ref())?;
         let data_path = data_root.join("plugins").join(id);
         // Leading dot is excluded by the plugin-id grammar, so this never aliases
         // a second plugin's namespace.
