@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- 修正 README 缺失测试使用 `README.MD` 伪装非候选文件的跨平台假设：Windows 大小写不敏感文件系统会将其匹配为 `README.md` 并触发清单校验错误，现使用真正不同名的 `NOTES.md`；生产清单校验不放宽。
+
 ### Added
 
 - CI 保留 Cargo 测试输出，在失败时将 panic 上下文发布为任务错误注释和摘要，便于定位 Windows 等跨平台失败；不改变测试集合或失败判定。

@@ -371,8 +371,8 @@ fn readme_missing_precedence_utf8_and_exact_byte_bound() {
         if let Some(name) = name {
             fs::write(src.join(name), &bytes).unwrap();
         } else {
-            // The documented candidate list deliberately excludes this variant.
-            fs::write(src.join("README.MD"), "not a candidate").unwrap();
+            // Use a genuinely distinct name on case-insensitive filesystems too.
+            fs::write(src.join("NOTES.md"), "not a candidate").unwrap();
         }
         if name == Some("README.md") {
             fs::write(src.join("README"), "fallback").unwrap();
