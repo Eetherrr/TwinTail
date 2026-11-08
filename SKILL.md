@@ -76,7 +76,7 @@ tests/fixtures/          # 脱敏 OneBot 与 IPC 数据
 
 ### 4.1 清单、身份与依赖
 
-插件包包含 `plugin.toml`、匹配目标平台的可执行文件、配置 JSON Schema、许可证和校验摘要。可执行文件路径限定在包目录内，禁止 shell 字符串启动。校验摘要用于损坏检测，不宣称等同于签名或可信来源。
+插件包包含 `plugin.toml`、匹配目标平台的可执行文件、配置 JSON Schema、许可证和校验摘要。统一安装根默认为 `packages/<id>/<version>/`，每个插件独立目录，配置与业务数据另存 `data/plugins/<id>/`。包根可提供 UTF-8 `README.md`（兼容 `README`），安装时纳入校验清单；管理只读方法 `plugins.readme` 按 id/version 有界读取，WebUI 以转义纯文本展示用途说明，不执行包内 HTML 或脚本，不加载远程图片。缺文档的旧包保持兼容。可执行文件路径限定在包目录内，禁止 shell 字符串启动。校验摘要用于损坏检测，不宣称等同于签名或可信来源。
 
 清单设计字段：`id`（稳定且全局唯一）、`name`、`version`（SemVer）、`protocol_version`、`host_api`（兼容范围）、`entrypoint`、目标平台、`kind`（adapter/service/feature/admin，可多角色）、`capabilities`、事件订阅、服务声明、`config_schema`、`config_version`、强/可选依赖及版本范围、`reload_policy`。这是后续完整设计字段。P1 基线字段为 id/name/version/protocol_version/host_api/entrypoint/args/capabilities/required_capabilities/dependencies；P3 增加 config_schema/config_version/reload_policy/target。格式及实际语义见 [清单指南](docs/plugin-api/manifest.md)，其余规划字段尚无运行语义。
 

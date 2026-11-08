@@ -448,6 +448,31 @@ fn config_rejects_unsafe_credentials_and_binding_without_echo() {
     }
 }
 #[test]
+fn readme_openapi_has_exact_method_and_inert_bounded_contract() {
+    let api = web_admin::openapi();
+    let request = &api["paths"]["/api/v1/manage"]["post"]["requestBody"]["content"]["application/json"]
+        ["schema"];
+    let methods = request["properties"]["method"]["enum"].as_array().unwrap();
+    assert!(methods.contains(&json!("plugins.readme")));
+    assert!(!methods.contains(&json!("plugins.readme.extra")));
+    assert_eq!(
+        request["allOf"][0]["then"]["properties"]["payload"]["$ref"],
+        "#/components/schemas/PluginReadmeRequest"
+    );
+    let result = &api["components"]["schemas"]["PluginReadme"];
+    assert_eq!(
+        result["required"],
+        json!(["filename", "content", "verified"])
+    );
+    assert_eq!(result["properties"]["verified"]["const"], false);
+    assert_eq!(
+        result["properties"]["filename"]["enum"],
+        json!(["README.md", "README", null])
+    );
+    assert_eq!(result["properties"]["content"]["maxLength"], 131072);
+}
+
+#[test]
 fn generated_openapi_has_no_drift() {
     let expected = serde_json::to_string_pretty(&web_admin::openapi()).unwrap() + "\n";
     assert_eq!(

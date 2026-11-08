@@ -45,6 +45,17 @@ pub struct PackageInventory {
     pub verified: bool,
 }
 
+/// An inert installed README; the package contents have not been fully verified.
+#[derive(Clone, Debug, Serialize)]
+pub struct PackageReadme {
+    /// Selected fixed basename, or null when neither candidate exists.
+    pub filename: Option<String>,
+    /// UTF-8 document text, or null when missing; never rendered as active HTML.
+    pub content: Option<String>,
+    /// Always false: this read does not certify package integrity.
+    pub verified: bool,
+}
+
 /// Versioned package store, independent of host configuration and plugin data.
 ///
 /// The administrator must protect this root and source directories from concurrent
@@ -62,6 +73,13 @@ fn io(_: std::io::Error) -> RpcError {
 fn reject_links(path: &Path) -> Result<(), RpcError> {
     for ancestor in path.ancestors() {
         let meta = fs::symlink_metadata(ancestor).map_err(io)?;
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            if meta.file_attributes() & 0x400 != 0 {
+                return Err(invalid("reparse points are forbidden in package paths"));
+            }
+        }
         if meta.file_type().is_symlink() {
             return Err(invalid("symbolic links are forbidden in package paths"));
         }
@@ -202,6 +220,36 @@ pub(crate) fn verify_package_dir(path: &Path) -> Result<Option<String>, RpcError
 // Keep the file handle alive; OS locks release even on process termination.
 struct Lock {
     _file: fs::File,
+}
+
+fn regular_file(metadata: &fs::Metadata) -> Result<(), RpcError> {
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Err(invalid("unsafe package file"));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if metadata.nlink() != 1 {
+            return Err(invalid("hard links are forbidden in package files"));
+        }
+    }
+    Ok(())
+}
+fn bounded(path: &Path, limit: u64) -> Result<Vec<u8>, RpcError> {
+    reject_links(path)?;
+    let metadata = fs::symlink_metadata(path).map_err(io)?;
+    regular_file(&metadata)?;
+    if metadata.len() > limit {
+        return Err(invalid("package file exceeds byte limit"));
+    }
+    let file = fs::File::open(path).map_err(io)?;
+    regular_file(&file.metadata().map_err(io)?)?;
+    let mut bytes = Vec::new();
+    file.take(limit + 1).read_to_end(&mut bytes).map_err(io)?;
+    if bytes.len() as u64 > limit {
+        return Err(invalid("package file exceeds byte limit"));
+    }
+    Ok(bytes)
 }
 
 impl PackageStore {
@@ -434,23 +482,6 @@ impl PackageStore {
     /// Returns `InvalidConfig` for unsafe paths, malformed or oversized metadata,
     /// identity mismatches, missing receipt files or resource-limit violations.
     pub fn inventory(&self) -> Result<Vec<PackageInventory>, RpcError> {
-        fn bounded(path: &Path, limit: u64) -> Result<Vec<u8>, RpcError> {
-            reject_links(path)?;
-            let metadata = fs::symlink_metadata(path).map_err(io)?;
-            if !metadata.is_file() || metadata.len() > limit {
-                return Err(invalid("invalid or oversized package metadata"));
-            }
-            let mut bytes = Vec::new();
-            fs::File::open(path)
-                .map_err(io)?
-                .take(limit + 1)
-                .read_to_end(&mut bytes)
-                .map_err(io)?;
-            if bytes.len() as u64 > limit {
-                return Err(invalid("package metadata exceeds limit"));
-            }
-            Ok(bytes)
-        }
         reject_links(&self.root)?;
         let mut packages = Vec::new();
         let mut identities = 0;
@@ -481,64 +512,111 @@ impl PackageStore {
                     .file_name()
                     .into_string()
                     .map_err(|_| invalid("invalid package version"))?;
-                let path = self.location(&id, &version)?;
-                reject_links(&path)?;
-                let bytes = bounded(&path.join("plugin.toml"), 65536)?;
-                let text = std::str::from_utf8(&bytes)
-                    .map_err(|_| invalid("invalid installed manifest"))?;
-                let manifest: Manifest =
-                    toml::from_str(text).map_err(|_| invalid("invalid installed manifest"))?;
-                crate::validate_manifest(&manifest)?;
-                if manifest.id != id || manifest.version != version {
-                    return Err(invalid("installed package identity mismatch"));
-                }
-                let receipt: BTreeMap<String, String> =
-                    serde_json::from_slice(&bounded(&path.join("checksums.json"), 1024 * 1024)?)
-                        .map_err(|_| invalid("invalid checksum inventory"))?;
-                if receipt.is_empty()
-                    || receipt.len() > MAX_FILES
-                    || !receipt.contains_key("plugin.toml")
-                    || !receipt.contains_key(&manifest.entrypoint)
-                    || manifest
-                        .config_schema
-                        .as_ref()
-                        .is_some_and(|schema| !receipt.contains_key(schema))
-                {
-                    return Err(invalid("invalid checksum inventory entries"));
-                }
-                let mut total = 0_u64;
-                for (relative, checksum) in &receipt {
-                    crate::plan::validate_relative(Path::new(relative), "receipt path")?;
-                    if Path::new(relative).components().count() > 64
-                        || checksum.len() != 64
-                        || !checksum
-                            .bytes()
-                            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-                    {
-                        return Err(invalid("invalid checksum inventory entry"));
-                    }
-                    let file = path.join(relative);
-                    reject_links(&file)?;
-                    let metadata = fs::symlink_metadata(file).map_err(io)?;
-                    if !metadata.is_file() || metadata.len() > MAX_FILE {
-                        return Err(invalid("unsafe package receipt file"));
-                    }
-                    total += metadata.len();
-                    if total > MAX_TOTAL {
-                        return Err(invalid("package total size exceeds limit"));
-                    }
-                }
-                packages.push(PackageInventory {
-                    id: id.clone(),
-                    version,
-                    path,
-                    checksum: digest(&receipt)?,
-                    verified: false,
-                });
+                packages.push(self.installed_metadata(&id, &version)?.0);
             }
         }
         packages.sort_by(|a, b| (&a.id, &a.version).cmp(&(&b.id, &b.version)));
         Ok(packages)
+    }
+    // Metadata validation shared by inventory and targeted inert document reads.
+    fn installed_metadata(
+        &self,
+        id: &str,
+        version: &str,
+    ) -> Result<(PackageInventory, BTreeMap<String, String>), RpcError> {
+        let path = self.location(id, version)?;
+        reject_links(&path)?;
+        let bytes = bounded(&path.join("plugin.toml"), 65536)?;
+        let text =
+            std::str::from_utf8(&bytes).map_err(|_| invalid("invalid installed manifest"))?;
+        let manifest: Manifest =
+            toml::from_str(text).map_err(|_| invalid("invalid installed manifest"))?;
+        crate::validate_manifest(&manifest)?;
+        if manifest.id != id || manifest.version != version {
+            return Err(invalid("installed package identity mismatch"));
+        }
+        let receipt: BTreeMap<String, String> =
+            serde_json::from_slice(&bounded(&path.join("checksums.json"), 1024 * 1024)?)
+                .map_err(|_| invalid("invalid checksum inventory"))?;
+        if receipt.is_empty()
+            || receipt.len() > MAX_FILES
+            || !receipt.contains_key("plugin.toml")
+            || !receipt.contains_key(&manifest.entrypoint)
+            || manifest
+                .config_schema
+                .as_ref()
+                .is_some_and(|schema| !receipt.contains_key(schema))
+        {
+            return Err(invalid("invalid checksum inventory entries"));
+        }
+        let mut total = 0_u64;
+        for (relative, checksum) in &receipt {
+            crate::plan::validate_relative(Path::new(relative), "receipt path")?;
+            if Path::new(relative).components().count() > 64
+                || checksum.len() != 64
+                || !checksum
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            {
+                return Err(invalid("invalid checksum inventory entry"));
+            }
+            let file = path.join(relative);
+            reject_links(&file)?;
+            let metadata = fs::symlink_metadata(file).map_err(io)?;
+            regular_file(&metadata)?;
+            if metadata.len() > MAX_FILE {
+                return Err(invalid("unsafe package receipt file"));
+            }
+            total += metadata.len();
+            if total > MAX_TOTAL {
+                return Err(invalid("package total size exceeds limit"));
+            }
+        }
+        Ok((
+            PackageInventory {
+                id: id.into(),
+                version: version.into(),
+                path,
+                checksum: digest(&receipt)?,
+                verified: false,
+            },
+            receipt,
+        ))
+    }
+    /// Read the first installed README.md or README as inert UTF-8 text.
+    ///
+    /// Validates bounded manifest/receipt metadata and file paths, but does not hash
+    /// executable contents or certify the package. Missing documents succeed with
+    /// null fields. The selected document must be receipt-listed and at most 128 KiB.
+    /// # Errors
+    /// Returns `InvalidConfig` for unsafe paths/links, invalid package metadata,
+    /// invalid UTF-8 or a document exceeding the byte limit.
+    pub fn readme(&self, id: &str, version: &str) -> Result<PackageReadme, RpcError> {
+        let (package, receipt) = self.installed_metadata(id, version)?;
+        for filename in ["README.md", "README"] {
+            let path = package.path.join(filename);
+            match fs::symlink_metadata(&path) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(io(error)),
+                Ok(_) => {}
+            }
+            if !receipt.contains_key(filename) {
+                return Err(invalid("README is not in installed checksum inventory"));
+            }
+            let bytes = bounded(&path, 128 * 1024)?;
+            let content =
+                String::from_utf8(bytes).map_err(|_| invalid("README must be valid UTF-8"))?;
+            return Ok(PackageReadme {
+                filename: Some(filename.into()),
+                content: Some(content),
+                verified: false,
+            });
+        }
+        Ok(PackageReadme {
+            filename: None,
+            content: None,
+            verified: false,
+        })
     }
     /// Remove only a package version from disk, preserving all config and data.
     /// The management layer must reject enabled/in-use versions before calling.

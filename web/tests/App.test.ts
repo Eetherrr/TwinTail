@@ -8,12 +8,15 @@ const wrappers: VueWrapper[] = []
 let readonly = false, expired = false, loginRequired = false, conflict = false
 let ops: Operation[] = [], calls: { method: string; payload: Record<string, unknown> }[] = []
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status })
+let readmeReply: (payload: Record<string, unknown>) => Response | Promise<Response>
+function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done }); return { promise, resolve } }
 function button(wrapper: VueWrapper, text: string) { const found = wrapper.findAll('button').find(b => b.text() === text); if (!found) throw new Error(`Missing button: ${text}`); return found }
-async function openEditor(wrapper: VueWrapper) { await wrapper.get('.plugin-card').trigger('click'); await flushPromises(); return wrapper.get('textarea') }
+async function openEditor(wrapper: VueWrapper) { await (wrapper.find('.plugin-card').exists() ? wrapper.get('.plugin-card') : wrapper.get('tbody tr button')).trigger('click'); await flushPromises(); return wrapper.get('textarea') }
 async function setup() { const wrapper = mount(App); wrappers.push(wrapper); await flushPromises(); return wrapper }
 beforeEach(() => {
   vi.stubGlobal('localStorage', { setItem: vi.fn(), getItem: vi.fn() }); vi.stubGlobal('sessionStorage', { setItem: vi.fn(), getItem: vi.fn() })
   vi.useFakeTimers(); readonly = false; expired = false; loginRequired = false; conflict = false; ops = []; calls = []
+  readmeReply = () => response({ result: { filename: null, content: null, verified: false } })
   vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
     if (path === '/api/v1/session') {
       if (init.method === 'DELETE') return new Response(null, { status: 204 })
@@ -22,8 +25,9 @@ beforeEach(() => {
     }
     if (expired) return response({ error: { code: 'Unauthorized', message: 'expired' } }, 401)
     const body = JSON.parse(String(init.body)); calls.push(body)
+    if (body.method === 'plugins.readme') return readmeReply(body.payload)
     if (body.method === 'plugins.list') return response({ result: [plugin] })
-    if (body.method === 'plugins.installed') return response({ result: [{ id: plugin.id, version: plugin.version, path: '/fixture', checksum: 'x' }, { id: 'other-plugin', version: '2.0.0', path: '/other', checksum: 'y' }] })
+    if (body.method === 'plugins.installed') return response({ result: [{ id: plugin.id, version: plugin.version, path: '/fixture', checksum: 'x' }, { id: 'other-plugin', version: '2.0.0', path: '/other', checksum: 'y' }, { id: plugin.id, version: '1.1.0', path: '/fixture-new', checksum: 'z' }] })
     if (body.method === 'operations.list') return response({ result: ops })
     if (body.method === 'management.overview') return response({ result: { permissions: { read: true, write: !readonly }, readonly } })
     if (body.method === 'config.schema' || body.method === 'config.get') return response({ result: snapshot })
@@ -36,6 +40,104 @@ beforeEach(() => {
   }))
 })
 afterEach(() => { wrappers.splice(0).forEach(w => w.unmount()); vi.useRealTimers(); vi.unstubAllGlobals() })
+describe('installed README viewer', () => {
+  it('reads only on explicit request, uses selected identity, and keeps malicious HTML as text', async () => {
+    readonly = true
+    const malicious = '<script>alert(1)</script><img src="https://evil.test/track" onerror="alert(2)"><iframe src="https://evil.test"></iframe>\n# README'
+    const filename = '<img src=x>.md'
+    readmeReply = () => response({ result: { filename, content: malicious, verified: false } })
+    const wrapper = await setup(); await openEditor(wrapper)
+    expect(calls.filter(c => c.method === 'plugins.readme')).toHaveLength(0)
+    await vi.advanceTimersByTimeAsync(5000); await flushPromises()
+    expect(calls.filter(c => c.method === 'plugins.readme')).toHaveLength(0)
+    await button(wrapper, '查看 README').trigger('click'); await flushPromises()
+    expect(calls.find(c => c.method === 'plugins.readme')?.payload).toEqual({ id: plugin.id, version: '1.0.0' })
+    const panel = wrapper.get('.readme-panel')
+    expect(panel.text()).toContain(`${plugin.id} · v1.0.0`)
+    expect(panel.get('.readme-filename').text()).toBe(filename)
+    expect(panel.get('pre').text()).toBe(malicious)
+    expect(panel.findAll('script,img,iframe,a')).toHaveLength(0)
+    expect(panel.html()).toContain('&lt;script&gt;')
+    expect(panel.text()).toContain('未验证')
+    await vi.advanceTimersByTimeAsync(5000); await flushPromises()
+    expect(calls.filter(c => c.method === 'plugins.readme')).toHaveLength(1)
+  })
+  it('shows missing and empty documents and reads installed but disabled plugins', async () => {
+    const wrapper = await setup(); await openEditor(wrapper)
+    await wrapper.findAll('[role="tab"]')[1].trigger('click')
+    await wrapper.findAll('tbody tr').find(row => row.text().includes('other-plugin'))!.get('button').trigger('click')
+    await button(wrapper, '查看 README').trigger('click'); await flushPromises()
+    expect(calls.find(c => c.method === 'plugins.readme')?.payload).toEqual({ id: 'other-plugin', version: '2.0.0' })
+    expect(wrapper.get('.readme-panel').text()).toContain('未提供 README')
+    expect(wrapper.find('.readme-content').exists()).toBe(false)
+    readmeReply = () => response({ result: { filename: 'README.txt', content: '', verified: false } })
+    await button(wrapper, '查看 README').trigger('click'); await flushPromises()
+    expect(wrapper.get('.readme-panel').text()).toContain('README 内容为空')
+    expect(wrapper.get('.readme-filename').text()).toBe('README.txt')
+  })
+  it('shows loading and errors inline and allows retry', async () => {
+    const pending = deferred<Response>()
+    readmeReply = () => pending.promise
+    const wrapper = await setup(); await openEditor(wrapper)
+    await button(wrapper, '查看 README').trigger('click')
+    expect(wrapper.get('.readme-panel [role="status"]').text()).toContain('正在读取')
+    expect(button(wrapper, '查看 README').attributes('disabled')).toBeDefined()
+    pending.resolve(response({ error: { code: 'Io', message: 'README read failed' } }, 400)); await flushPromises()
+    expect(wrapper.get('.readme-panel [role="alert"]').text()).toContain('README read failed（Io）')
+    expect(button(wrapper, '查看 README').attributes('disabled')).toBeUndefined()
+    readmeReply = () => response({ result: { filename: 'README.md', content: 'retry document', verified: false } })
+    await button(wrapper, '查看 README').trigger('click'); await flushPromises()
+    expect(wrapper.get('.readme-content').text()).toBe('retry document')
+    expect(wrapper.find('.readme-panel [role="alert"]').exists()).toBe(false)
+  })
+  it('clears old text on version change and ignores stale responses without clearing current loading', async () => {
+    readmeReply = () => response({ result: { filename: 'README.md', content: 'old version', verified: false } })
+    const wrapper = await setup(); await openEditor(wrapper)
+    await button(wrapper, '查看 README').trigger('click'); await flushPromises()
+    expect(wrapper.get('.readme-content').text()).toBe('old version')
+    await wrapper.get('#reload-version').setValue('1.1.0')
+    expect(wrapper.find('.readme-content').exists()).toBe(false)
+    expect(calls.filter(c => c.method === 'plugins.readme')).toHaveLength(1)
+    const stale = deferred<Response>(), latest = deferred<Response>()
+    readmeReply = payload => payload.version === '1.1.0' ? stale.promise : latest.promise
+    await button(wrapper, '查看 README').trigger('click')
+    await wrapper.get('#reload-version').setValue('1.0.0')
+    await button(wrapper, '查看 README').trigger('click')
+    stale.resolve(response({ result: { filename: 'README.md', content: 'stale version', verified: false } })); await flushPromises()
+    expect(wrapper.find('.readme-content').exists()).toBe(false)
+    expect(wrapper.get('.readme-panel [role="status"]').text()).toContain('正在读取')
+    latest.resolve(response({ result: { filename: 'README.md', content: 'current version', verified: false } })); await flushPromises()
+    expect(wrapper.get('.readme-content').text()).toBe('current version')
+  })
+  it('ignores stale failures after selecting another plugin', async () => {
+    const pending = deferred<Response>(); readmeReply = () => pending.promise
+    const wrapper = await setup(); await openEditor(wrapper)
+    await button(wrapper, '查看 README').trigger('click')
+    await wrapper.findAll('[role="tab"]')[1].trigger('click')
+    await wrapper.findAll('tbody tr').find(row => row.text().includes('other-plugin'))!.get('button').trigger('click')
+    pending.resolve(response({ error: { code: 'Io', message: 'stale error' } }, 400)); await flushPromises()
+    expect(wrapper.get('.readme-panel').text()).not.toContain('stale error')
+    expect(wrapper.find('.readme-panel [role="status"]').exists()).toBe(false)
+  })
+  it('clears loaded README on collapse and discards pending reads across logout and login', async () => {
+    readmeReply = () => response({ result: { filename: 'README.md', content: 'private document', verified: false } })
+    const wrapper = await setup(); await openEditor(wrapper)
+    await button(wrapper, '查看 README').trigger('click'); await flushPromises()
+    await button(wrapper, '收起 ×').trigger('click'); await openEditor(wrapper)
+    expect(wrapper.find('.readme-content').exists()).toBe(false)
+    const pending = deferred<Response>(); readmeReply = () => pending.promise
+    await button(wrapper, '查看 README').trigger('click')
+    await button(wrapper, '退出登录 ↗').trigger('click'); await flushPromises()
+    expect(wrapper.find('#token').exists()).toBe(true)
+    await wrapper.get('#token').setValue('new-session-token')
+    await wrapper.get('form').trigger('submit'); await flushPromises(); await openEditor(wrapper)
+    pending.resolve(response({ result: { filename: 'README.md', content: 'previous session document', verified: false } })); await flushPromises()
+    expect(wrapper.find('.readme-content').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('previous session document')
+    expect(wrapper.text()).not.toContain('private document')
+    expect(button(wrapper, '查看 README').attributes('disabled')).toBeUndefined()
+  })
+})
 describe('management interactions', () => {
   it('logs in without storing or rendering the token', async () => {
     loginRequired = true

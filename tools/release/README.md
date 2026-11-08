@@ -34,6 +34,7 @@ twintail-0.1.0-TARGET/             # 仅归档有顶层目录
   packages/PLUGIN/0.1.0/
     PLUGIN[.exe]
     plugin.toml
+    README.md                     # 每个插件的有界 UTF-8 说明
     checksums.json
     config.schema.json            # web-admin 和 adapter-snowluma
   docs/{architecture,plugin-api,compatibility,release}/...
@@ -56,7 +57,7 @@ twintail-0.1.0-TARGET/             # 仅归档有顶层目录
 
 stage 使用代码中的精确文件白名单，不递归复制源码仓库或 target；fixtures、运行配置、data、令牌、`.env` 和缓存不会从额外路径混入。五个输入二进制检查 ELF/PE 目标架构；清单 id/version 必须匹配 workspace，entrypoint 必须为原始插件名，打包后重写 Windows `.exe` 和三个已定义的 manifest `target` 值。发布包不会启用插件、不生成 host.toml、不授予能力，也不包含 SnowLuma 本体。四插件附带兼容核心 PackageStore 的 `checksums.json`，可作为独立本地包源安装。
 
-`SHA256SUMS` 按路径排序，覆盖所有其他文件，包括 `release.json` 和插件 receipt，排除自身以避免递归；插件 receipt 覆盖所在包的 manifest、binary 和可选 schema，排除自身。元信息记录版本、Rust MSRV、target/triple、release profile、两个 lock 摘要和候选 gate。SHA256 是损坏检测，不是签名或供应链来源认证；攻击者同时重写文件和摘要仍可伪造。MIT 和第三方许可正文随包提供，摘要验证不代替遵守这些许可。工具不签名。
+`SHA256SUMS` 按路径排序，覆盖所有其他文件，包括 `release.json` 和插件 receipt，排除自身以避免递归；插件 receipt 覆盖所在包的 manifest、binary、README.md 和可选 schema，排除自身。四个插件源码目录的 README.md 必须存在，stage 按原始字节复制到 `packages/PLUGIN/VERSION/README.md`；stage 与 verify 均校验其为 UTF-8 且不超过 128 KiB。发行白名单只接受 README.md，不接受 README 别名或额外插件文件。说明仅作为惰性文本，不参与程序执行。元信息记录版本、Rust MSRV、target/triple、release profile、两个 lock 摘要和候选 gate。SHA256 是损坏检测，不是签名或供应链来源认证；攻击者同时重写文件和摘要仍可伪造。MIT 和第三方许可正文随包提供，摘要验证不代替遵守这些许可。工具不签名。
 
 stage 文件权限统一为 binary 0755、其他 0644，文件时间为 epoch；归档按路径排序，tar owner/group/time 清零、无扩展头；gzip 不含文件名、mtime 为零；ZIP 时间为 1980-01-01、文件权限固定、没有额外字段。相同内容、相同 Python/zlib 实现生成相同归档摘要；不声称不同 Rust 构建环境的二进制或不同压缩库版本逐字节相同。输出目录名不影响归档。归档顶层名由版本/target 固定生成，建议输出文件名也带相同信息。
 

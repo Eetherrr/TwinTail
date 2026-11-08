@@ -35,6 +35,7 @@ API_DOCS = "contract-tools README manifest errors events configuration storage q
 ARCH_DOCS = "README 0001-p0-baseline 0002-p1-plugin-host 0003-p2-sdk-routing 0004-p3-management-config-reload 0005-p4-onebot-snowluma 0006-p5-web-admin 0007-p6-release-hardening security".split()
 SCHEMAS = "protocol initialize plugin-manifest config-prepare action-call service-call hello service-registration config-commit bot-ref delivery-report register-bot management-call host-config config-snapshot event-envelope subscribe publish-event".split()
 DOCUMENTS = ["README.md", "AGENT.md", "SKILL.md", "CHANGELOG.md", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "web/package.json", "web/package-lock.json", "plugins/web-admin/openapi.json"] + [f"docs/plugin-api/{name}.md" for name in API_DOCS] + [f"docs/architecture/{name}.md" for name in ARCH_DOCS] + ["docs/compatibility/README.md", "docs/compatibility/snowluma.md"] + [f"schemas/{name}-v1.json" for name in SCHEMAS]
+MAX_README = 128 * 1024
 MAX_FILE = 128 * 1024 * 1024
 MAX_TOTAL = 512 * 1024 * 1024
 MAX_FILES = 256
@@ -81,6 +82,14 @@ def read(path, limit=MAX_FILE):
     return data
 
 
+def readme_check(data):
+    require(len(data) <= MAX_README, "plugin README exceeds limit")
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ReleaseError("plugin README must be UTF-8") from error
+
+
 def sha(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -114,7 +123,7 @@ def base_files(version, target):
     files.add(f"bin/twintail-host{suffix}")
     for plugin in PLUGINS:
         prefix = f"packages/{plugin}/{version}"
-        files.update(f"{prefix}/{name}" for name in [plugin + suffix, "plugin.toml", "checksums.json"])
+        files.update(f"{prefix}/{name}" for name in [plugin + suffix, "plugin.toml", "README.md", "checksums.json"])
         if plugin in ("adapter-snowluma", "web-admin"):
             files.add(f"{prefix}/config.schema.json")
     return files
@@ -152,6 +161,9 @@ def stage(repo, binaries, target, output):
     for plugin, source in PLUGINS.items():
         prefix = f"packages/{plugin}/{version}"
         files[f"{prefix}/plugin.toml"] = manifest_bytes(read(repo / source / "plugin.toml", 65536), plugin, version, target)
+        readme = read(repo / source / "README.md", MAX_README)
+        readme_check(readme)
+        files[f"{prefix}/README.md"] = readme
         if plugin in ("adapter-snowluma", "web-admin"):
             schema = read(repo / source / "config.schema.json", 1024 * 1024)
             json.loads(schema)
@@ -234,6 +246,7 @@ def validate(files):
     require(metadata["lock_sha256"] == {name: sha(files[name]) for name in ("Cargo.lock", "web/package-lock.json")}, "lock metadata mismatch")
     for plugin in PLUGINS:
         prefix = f"packages/{plugin}/{version}"
+        readme_check(files[f"{prefix}/README.md"])
         manifest = tomllib.loads(files[f"{prefix}/plugin.toml"].decode())
         require(manifest.get("id") == plugin and manifest.get("version") == version and manifest.get("target") == target and manifest.get("entrypoint") == plugin + TARGETS[target][1], "packaged manifest mismatch")
         receipt = {name.removeprefix(prefix + "/"): sha(data) for name, data in files.items() if name.startswith(prefix + "/") and not name.endswith("/checksums.json")}

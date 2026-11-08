@@ -354,3 +354,115 @@ fn native_unix_backslash_filename_is_rejected_without_aliasing() {
     assert!(store.install_local(&src).is_err());
     assert!(store.inventory().unwrap().is_empty());
 }
+
+#[test]
+fn readme_missing_precedence_utf8_and_exact_byte_bound() {
+    for (name, bytes) in [
+        (None, Vec::new()),
+        (Some("README"), b"plain fallback".to_vec()),
+        (
+            Some("README.md"),
+            "# 文档\n<script>inert</script>".as_bytes().to_vec(),
+        ),
+        (Some("README.md"), vec![b'x'; 128 * 1024]),
+    ] {
+        let temp = TempDir::new().unwrap();
+        let src = source(temp.path());
+        if let Some(name) = name {
+            fs::write(src.join(name), &bytes).unwrap();
+        } else {
+            // The documented candidate list deliberately excludes this variant.
+            fs::write(src.join("README.MD"), "not a candidate").unwrap();
+        }
+        if name == Some("README.md") {
+            fs::write(src.join("README"), "fallback").unwrap();
+        }
+        let store = PackageStore::new(temp.path().join("packages")).unwrap();
+        let package = store.install_local(&src).unwrap();
+        // Same-size executable damage does not trigger a full checksum read.
+        fs::write(package.path.join("bin/plugin"), "damage").unwrap();
+        let result = store.readme("sample", "1.0.0").unwrap();
+        assert_eq!(result.filename.as_deref(), name);
+        assert_eq!(
+            result.content,
+            name.map(|_| String::from_utf8(bytes).unwrap())
+        );
+        assert!(!result.verified);
+        assert!(store.verify("sample", "1.0.0").is_err());
+    }
+}
+
+#[test]
+fn readme_rejects_oversize_invalid_utf8_unsafe_identity_and_receipt_tamper() {
+    for bytes in [vec![b'x'; 128 * 1024 + 1], vec![0xff, 0xfe]] {
+        let temp = TempDir::new().unwrap();
+        let src = source(temp.path());
+        fs::write(src.join("README.md"), bytes).unwrap();
+        fs::write(src.join("README"), "valid fallback must not mask error").unwrap();
+        let store = PackageStore::new(temp.path().join("packages")).unwrap();
+        store.install_local(src).unwrap();
+        assert_eq!(
+            store.readme("sample", "1.0.0").unwrap_err().code,
+            ErrorCode::InvalidConfig
+        );
+    }
+    let temp = TempDir::new().unwrap();
+    let src = source(temp.path());
+    let store = PackageStore::new(temp.path().join("packages")).unwrap();
+    let package = store.install_local(src).unwrap();
+    for (id, version) in [
+        ("../escape", "1.0.0"),
+        ("sample", "../escape"),
+        ("sample/x", "1.0.0"),
+    ] {
+        assert!(store.readme(id, version).is_err());
+    }
+    // An untracked document is not an installed package artifact.
+    fs::write(package.path.join("README.md"), "untracked").unwrap();
+    assert!(store.readme("sample", "1.0.0").is_err());
+    fs::remove_file(package.path.join("README.md")).unwrap();
+    let mut receipt: serde_json::Value =
+        serde_json::from_slice(&fs::read(package.path.join("checksums.json")).unwrap()).unwrap();
+    receipt["../outside"] = serde_json::json!("a".repeat(64));
+    fs::write(
+        package.path.join("checksums.json"),
+        serde_json::to_vec(&receipt).unwrap(),
+    )
+    .unwrap();
+    assert!(store.readme("sample", "1.0.0").is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn readme_rejects_symlinks_hardlinks_and_manifest_identity_tamper() {
+    use std::os::unix::fs::symlink;
+    for target in ["README.md", "plugin.toml", "checksums.json", "bin/plugin"] {
+        for hard in [false, true] {
+            let temp = TempDir::new().unwrap();
+            let src = source(temp.path());
+            fs::write(src.join("README.md"), "document").unwrap();
+            let store = PackageStore::new(temp.path().join("packages")).unwrap();
+            let package = store.install_local(src).unwrap();
+            let path = package.path.join(target);
+            let external = temp.path().join("external");
+            fs::rename(&path, &external).unwrap();
+            if hard {
+                fs::hard_link(&external, &path).unwrap();
+            } else {
+                symlink(&external, &path).unwrap();
+            }
+            assert!(
+                store.readme("sample", "1.0.0").is_err(),
+                "{target} hard={hard}"
+            );
+        }
+    }
+    let temp = TempDir::new().unwrap();
+    let src = source(temp.path());
+    let store = PackageStore::new(temp.path().join("packages")).unwrap();
+    let package = store.install_local(src).unwrap();
+    let mut manifest = read_manifest(&package.path);
+    manifest.id = "other".into();
+    write_manifest(&package.path, &manifest);
+    assert!(store.readme("sample", "1.0.0").is_err());
+}

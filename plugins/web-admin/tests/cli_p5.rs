@@ -569,6 +569,15 @@ async fn authenticated_http_management_and_independent_cli_rescue() {
     .await;
     browser.login().await;
     assert!(browser.read("plugins.list", json!({})).await.is_array());
+    assert_eq!(
+        browser
+            .read(
+                "plugins.readme",
+                json!({"id":"echo-plugin","version":"0.1.0"})
+            )
+            .await,
+        json!({"filename":null,"content":null,"verified":false})
+    );
     let denied = browser
         .manage("plugins.start", json!({"id":"echo-plugin"}))
         .await;

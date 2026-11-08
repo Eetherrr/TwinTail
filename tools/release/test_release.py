@@ -47,6 +47,7 @@ class ReleaseTests(unittest.TestCase):
             path.mkdir(parents=True, exist_ok=True)
             schema = '\nconfig_schema = "config.schema.json"' if plugin in ("adapter-snowluma", "web-admin") else ""
             (path / "plugin.toml").write_text(f'id = "{plugin}"\nversion = "0.1.0"\nentrypoint = "{plugin}"{schema}\n\n[dependencies]\n', encoding="utf-8")
+            (path / "README.md").write_text(f"# {plugin}\n\n用途、配置、能力、使用与重载。\n", encoding="utf-8")
             if schema:
                 (path / "config.schema.json").write_text("{}\n", encoding="utf-8")
 
@@ -77,6 +78,59 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(gate["license"], "MIT")
                 self.assertTrue((stage / "LICENSE").is_file())
                 self.assertTrue((stage / "THIRD_PARTY_NOTICES.md").is_file())
+
+    def test_plugin_readmes_preserved_whitelisted_and_hashed(self):
+        for target in release.TARGETS:
+            stage = self.stage(target, target)
+            files = release.directory_files(stage)
+            for plugin, source in release.PLUGINS.items():
+                name = f"packages/{plugin}/0.1.0/README.md"
+                expected = (self.repo / source / "README.md").read_bytes()
+                self.assertEqual(files[name], expected)
+                self.assertIn(name, release.base_files("0.1.0", target))
+                receipt = json.loads(files[f"packages/{plugin}/0.1.0/checksums.json"])
+                self.assertEqual(receipt["README.md"], release.sha(expected))
+                self.assertIn(f"{release.sha(expected)}  {name}\n".encode(), files["SHA256SUMS"])
+
+    def test_plugin_readme_required_and_source_bounds(self):
+        self.stage()
+        readme = self.repo / "examples/echo-plugin/README.md"
+        readme.unlink()
+        with self.assertRaises(FileNotFoundError):
+            release.stage(self.repo, self.binaries, "linux-x86_64", self.root / "missing-readme")
+        for label, content in [("utf8", b"\xff"), ("large", b"a" * (release.MAX_README + 1))]:
+            readme.write_bytes(content)
+            with self.subTest(label=label), self.assertRaises(release.ReleaseError):
+                release.stage(self.repo, self.binaries, "linux-x86_64", self.root / label)
+        readme.write_bytes(b"a" * release.MAX_README)
+        release.stage(self.repo, self.binaries, "linux-x86_64", self.root / "readme-at-limit")
+
+    def test_plugin_readme_tamper_missing_alias_and_invalid_text_rejected(self):
+        files = release.directory_files(self.stage())
+        name = "packages/echo-plugin/0.1.0/README.md"
+        for case in ("tamper", "missing", "alias", "utf8", "large"):
+            altered = dict(files)
+            if case in ("missing", "alias"):
+                data = altered.pop(name)
+                if case == "alias":
+                    altered[name.removesuffix(".md")] = data
+            else:
+                altered[name] = {"tamper": b"changed", "utf8": b"\xff", "large": b"a" * (release.MAX_README + 1)}[case]
+            # Recompute only the outer checksum to exercise package receipt validation.
+            altered["SHA256SUMS"] = "".join(f"{release.sha(data)}  {path}\n" for path, data in sorted(altered.items()) if path != "SHA256SUMS").encode()
+            with self.subTest(case=case), self.assertRaises(release.ReleaseError):
+                release.validate(altered)
+        # Even consistent checksums must not allow oversized/non-UTF8 README content.
+        for content in (b"\xff", b"a" * (release.MAX_README + 1)):
+            altered = dict(files)
+            altered[name] = content
+            receipt_name = "packages/echo-plugin/0.1.0/checksums.json"
+            receipt = json.loads(altered[receipt_name])
+            receipt["README.md"] = release.sha(content)
+            altered[receipt_name] = release.json_bytes(receipt)
+            altered["SHA256SUMS"] = "".join(f"{release.sha(data)}  {path}\n" for path, data in sorted(altered.items()) if path != "SHA256SUMS").encode()
+            with self.assertRaises(release.ReleaseError):
+                release.validate(altered)
 
     def test_repeated_stage_archive_identical_digest(self):
         for target in release.TARGETS:
@@ -143,7 +197,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn("  SHA256SUMS\n", sums)
         self.assertIn("  release.json\n", sums)
         receipt = json.loads((stage / "packages/web-admin/0.1.0/checksums.json").read_bytes())
-        self.assertEqual(set(receipt), {"web-admin", "plugin.toml", "config.schema.json"})
+        self.assertEqual(set(receipt), {"web-admin", "plugin.toml", "README.md", "config.schema.json"})
 
     def test_wrong_architecture_and_manifest_identity_rejected(self):
         self.stage()

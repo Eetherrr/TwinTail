@@ -15,6 +15,13 @@ describe('same-origin management client', () => {
     expect(fetcher.mock.calls[2][1].headers['X-CSRF-Token']).toBe('csrf')
     expect(api.csrf).toBe('')
   })
+  it('reads an exact installed plugin version through the typed README method', async () => {
+    const result = { filename: 'README.md', content: '<b>plain text</b>', verified: false }
+    const fetcher = vi.fn().mockResolvedValue(ok({ result })); vi.stubGlobal('fetch', fetcher)
+    const api = new Api(); api.csrf = 'csrf'
+    expect(await api.readme({ id: 'echo-plugin', version: '1.2.3' })).toEqual(result)
+    expect(fetcher.mock.calls[0][1]).toMatchObject({ method: 'POST', headers: { 'X-CSRF-Token': 'csrf' }, body: JSON.stringify({ method: 'plugins.readme', payload: { id: 'echo-plugin', version: '1.2.3' } }) })
+  })
   it('ignores a delayed old 401 after a new session is established', async () => {
     let finish: (response: Response) => void = () => {}
     vi.stubGlobal('fetch', vi.fn().mockImplementationOnce(() => new Promise(resolve => { finish = resolve })).mockResolvedValueOnce(ok({ csrf_token: 'new-csrf', expires_in_secs: 600 })))

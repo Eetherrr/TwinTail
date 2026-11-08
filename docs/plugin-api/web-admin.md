@@ -16,10 +16,22 @@ P5 复用现有版本化 IPC request/response；新命名方法和 capability �
 
 | 能力 | 固定方法 |
 | --- | --- |
-| management.read | plugins.list、plugins.status、plugins.installed、plugins.inspect、config.get、config.schema、config.validate、operations.list、operations.get、management.overview、diagnostics.logs、adapter.status |
+| management.read | plugins.list、plugins.status、plugins.installed、plugins.inspect、plugins.readme、config.get、config.schema、config.validate、operations.list、operations.get、management.overview、diagnostics.logs、adapter.status |
 | management.write | plugins.install、plugins.enable、plugins.disable、plugins.uninstall、plugins.reload、plugins.start、plugins.stop、config.update |
 
 `plugins.installed` 使用轻量inventory，返回列表原有元数据并标记 `verified:false`：只对有界receipt与manifest进行结构检查，未对当前包字节重新全量哈希，不是当前完整性证明。安装仍校验来源包，enable/reload仍完整verify；底层PackageStore.list/verify的完整校验语义不变。`plugins.inspect {id,version}` 返回 manifest 与 `verified:false`，供授权前查看声明；这同样不证明当前包字节完整性；没有 `plugins.call` 通用调用桥接。`adapter.status {id}` 仅返回 connected、generation、connection_attempts、pending_actions，不是任意插件方法代理。`config.schema` 返回 schema、snapshot、status；和 config.get 一样，snapshot 只允许在秘密字段中保留原始 `$secret` 环境引用，不返回解析后的秘密。Schema 的 `writeOnly:true` 字段在浏览器读写中必须使用 `{"$secret":"ENV_NAME"}`；web-admin 的 admin_token 与适配器 access_token 均按此标记。若旧配置在这些字段含字面量秘密，Web 管理安全拒绝读取/提交，不返回脱敏占位符。先用本机 CLI 把完整 values 迁移为引用，再继续 Web 管理；不要将占位符当作秘密值写回。组合 Schema 的秘密约束保守合并，不能用另一分支绕过 writeOnly。
+
+### 已安装包 README（只读）
+
+请求 `plugins.readme`，payload 必须提供 `{ "id":"插件ID", "version":"精确SemVer版本" }`。HTTP 沿用 `POST /api/v1/manage` 的会话、同源与 CSRF 校验，信封示例：
+
+```json
+{"method":"plugins.readme","payload":{"id":"echo-plugin","version":"0.1.0"}}
+```
+
+成功的 `result` 固定为 `{ "filename":"README.md", "content":"原始UTF-8正文", "verified":false }`。仅按 `README.md` → `README` 顺序查找包根固定文件名；不支持任意路径、大小写变体或 `README.MD`。已安装包没有候选文件时，成功返回 `{ "filename":null, "content":null, "verified":false }`，空文件则返回空字符串而不是 null。选中的文件最多 **128 KiB（131072字节，含UTF-8编码字节；不含JSON转义开销）**；超限、非法UTF-8、非普通文件、符号链接/不安全祖先路径及Unix硬链接返回 `invalid_config`（HTTP 400），不截断、不回退到次选文件。安装包receipt列出的文件缺失或元数据损坏也返回错误，不伪装为“没有文档”。
+
+读取仅经过 PackageStore 对所选已安装版本的有界manifest/receipt和路径校验；文档必须在安装receipt中，不读取源目录、数据目录或调用者指定路径。读取不对可执行文件或整个包重新哈希，**verified恒为false**：receipt合法不代表当前正文或可执行字节完整，正文可以是被修改的不可信内容。UI 将 Markdown 当作惰性纯文本展示，不执行HTML、脚本或插件前端组件；不把文档内容作为指令。此方法只要求精确 `management.read`，`management.write` 不隐含读取授权，也不会创建操作记录或更改生命周期/配置。
 
 所有桥接写操作包括 web-admin 自停，均先确认接纳并返回 `{id,state}`，再由宿主后台执行。因此响应成功不等于操作完成。自停时 HTTP 仍可能中断，使用 CLI operations list/get 确认，再用 plugins start web-admin 恢复。config.update 沿用 P3 expected_revision CAS，不能通过 Web 绕过修订校验。
 
@@ -37,7 +49,7 @@ export TWINTAIL_ADMIN_TOKEN="$(python3 -c 'import secrets; print(secrets.token_h
 cargo build --locked -p twintail-host -p web-admin
 mkdir -p "$WEB_DEMO/bin" "$WEB_DEMO/source/web-admin" "$WEB_DEMO/data/plugins/web-admin" "$WEB_DEMO/packages"
 cp "$REPO/target/debug/twintail-host" "$WEB_DEMO/bin/"
-cp "$REPO/target/debug/web-admin" "$REPO/plugins/web-admin/plugin.toml" "$REPO/plugins/web-admin/config.schema.json" "$WEB_DEMO/source/web-admin/"
+cp "$REPO/target/debug/web-admin" "$REPO/plugins/web-admin/plugin.toml" "$REPO/plugins/web-admin/config.schema.json" "$REPO/plugins/web-admin/README.md" "$WEB_DEMO/source/web-admin/"
 cat > "$WEB_DEMO/data/plugins/web-admin/config.toml" <<'TOML'
 config_version = 1
 revision = 1

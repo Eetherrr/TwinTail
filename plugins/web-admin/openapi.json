@@ -145,6 +145,56 @@
         ],
         "type": "object"
       },
+      "PluginReadme": {
+        "additionalProperties": false,
+        "description": "plugins.readme result: first README.md then README. Missing both succeeds with filename/content null. Metadata/path validation only, no full package hash; content may be modified and is untrusted. Invalid UTF-8, oversize, unsafe paths/links or invalid installed metadata return invalid_config (HTTP 400).",
+        "properties": {
+          "content": {
+            "description": "Inert UTF-8 text, at most 131072 bytes before JSON encoding. Render as plain text, never active Markdown/HTML.",
+            "maxLength": 131072,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "filename": {
+            "enum": [
+              "README.md",
+              "README",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verified": {
+            "const": false
+          }
+        },
+        "required": [
+          "filename",
+          "content",
+          "verified"
+        ],
+        "type": "object"
+      },
+      "PluginReadmeRequest": {
+        "description": "plugins.readme (management.read only): installed package identity and exact SemVer version; no caller-controlled filename/path.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
       "Session": {
         "properties": {
           "csrf_token": {
@@ -180,7 +230,7 @@
   "paths": {
     "/api/v1/manage": {
       "post": {
-        "description": "Read capability: management.overview, plugins.list/status/installed/inspect, operations.list/get, config.get/schema/validate, diagnostics.logs, adapter.status. Write capability: plugins.install/enable/disable/uninstall/reload/start/stop and config.update. Read-only grants receive 403 on writes. Targeted calls use payload.id; operations.get uses operation id. Config input uses unresolved values, never resolved secrets. Lifecycle/config mutations immediately return result OperationAck: poll operations.get until completed/failed/interrupted. A 504 or lost response does not prove mutation failure; use operations.list and the same request_key rather than blindly retrying. Results and payloads vary by method.",
+        "description": "Read capability: management.overview, plugins.list/status/installed/inspect/readme, operations.list/get, config.get/schema/validate, diagnostics.logs, adapter.status. Write capability: plugins.install/enable/disable/uninstall/reload/start/stop and config.update. Read-only grants receive 403 on writes. Targeted calls use payload.id; operations.get uses operation id. Config input uses unresolved values, never resolved secrets. Lifecycle/config mutations immediately return result OperationAck: poll operations.get until completed/failed/interrupted. A 504 or lost response does not prove mutation failure; use operations.list and the same request_key rather than blindly retrying. Results and payloads vary by method.",
         "parameters": [
           {
             "description": "Exact http://bound-loopback-IP:port; forwarded origins and localhost aliases rejected",
@@ -206,6 +256,27 @@
             "application/json": {
               "schema": {
                 "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "method": {
+                          "const": "plugins.readme"
+                        }
+                      },
+                      "required": [
+                        "method"
+                      ]
+                    },
+                    "then": {
+                      "properties": {
+                        "payload": {
+                          "$ref": "#/components/schemas/PluginReadmeRequest"
+                        }
+                      }
+                    }
+                  }
+                ],
                 "properties": {
                   "method": {
                     "enum": [
@@ -214,6 +285,7 @@
                       "plugins.status",
                       "plugins.installed",
                       "plugins.inspect",
+                      "plugins.readme",
                       "operations.list",
                       "operations.get",
                       "config.get",
@@ -234,7 +306,7 @@
                     "type": "string"
                   },
                   "payload": {
-                    "description": "Method-specific payload: id selects plugin/operation. Install uses path; enable uses id, optional version and grants. Mutations accept optional request_key (1..128 ASCII alphanumeric/dot/underscore/hyphen) for idempotency; same key with changed payload or actor conflicts. config.validate/update use values; update additionally requires expected_revision. plugin reload may select candidate version. See ConfigMutation and Operation schemas.",
+                    "description": "Method-specific payload: id selects plugin/operation. Install uses path; enable uses id, optional version and grants. Mutations accept optional request_key (1..128 ASCII alphanumeric/dot/underscore/hyphen) for idempotency; same key with changed payload or actor conflicts. config.validate/update use values; update additionally requires expected_revision. plugin reload may select candidate version. plugins.readme requires id and version; see PluginReadmeRequest/PluginReadme. See ConfigMutation and Operation schemas.",
                     "properties": {
                       "expected_revision": {
                         "minimum": 0,
@@ -282,6 +354,9 @@
                             "object",
                             "array"
                           ]
+                        },
+                        {
+                          "$ref": "#/components/schemas/PluginReadme"
                         }
                       ]
                     }

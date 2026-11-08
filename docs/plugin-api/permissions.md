@@ -13,7 +13,7 @@
 | `services.provide` | `services.register` 注册命名和版本化服务 |
 | `services.call` | 按显式 provider、service 与 SemVer 范围调用服务 |
 | `storage.private` | 预留词汇；P1 提供初始化数据目录，无存储 RPC |
-| `management.read`、`management.write` | 预留词汇；没有插件到管理路由 |
+| `management.read`、`management.write` | 独立管理桥接的精确只读/写权限，互不隐含；`plugins.readme {id,version}` 仅要求 read，方法白名单见 [Web 管理契约](web-admin.md#宿主管理桥接契约) |
 
 例如 capabilities 和 required_capabilities 都含 `host.health` 时，host.toml 对应条目的 grants 必须含该精确名称。只在 grants 写入、清单未申请的能力不会授予。
 

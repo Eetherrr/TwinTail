@@ -5,6 +5,8 @@ export class ApiError extends Error {
 export type Json = unknown
 export interface Plugin { id: string; version: string; state: string; generation: number; error?: { code: string; message: string } | null; reload?: Json }
 export interface Package { id: string; version: string; path: string; checksum: string }
+export interface PluginReadmeRequest { id: string; version: string }
+export interface PluginReadme { filename: string | null; content: string | null; verified: false }
 export interface Operation { id: string; state: string; stage: string; method: string; target: string | null; created_unix_ms?: number; result?: { status: string; code?: string; outcome?: string; revision?: number; needs_recovery?: boolean } }
 export interface Configuration { snapshot: { revision: number; config_version: number; values: Json }; status: { desired_revision: number; applied_revision: number | null } }
 export interface Session { csrf_token: string; expires_in_secs: number }
@@ -48,6 +50,7 @@ export class Api {
     return data
   }
   async logout() { await this.request<void>('/api/v1/session', 'DELETE'); this.invalidate() }
+  readme(payload: PluginReadmeRequest): Promise<PluginReadme> { return this.rpc<PluginReadme>('plugins.readme', payload) }
   async rpc<T>(method: string, payload: unknown = {}): Promise<T> {
     const response = await this.request<{ result: T }>('/api/v1/manage', 'POST', { method, payload })
     return response.result

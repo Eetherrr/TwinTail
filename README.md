@@ -28,6 +28,26 @@ cargo run -p twintail-host --bin twintail-host --locked -- --version
 
 可使用 `--data-dir PATH` 与 `--install-dir PATH` 指定目录。默认分别是当前工作目录下的 `data/` 与 `packages/`。正常运行会创建/检查私有数据根，并绑定本机管理端点；Unix 数据根要求当前有效用户拥有且权限精确为 0700，端点为 `data/management.sock`（0600）。已有不安全目录不会自动修改，残留 socket 需确认宿主已停止后手动清理。路径含空格时请加引号；以 `-` 开头的相对路径需加 `./` 前缀。P0 历史规则见 [ADR 0001](docs/architecture/0001-p0-baseline.md)，P1 行为见 [插件 API 指南](docs/plugin-api/README.md)。
 
+### 插件目录与说明文档
+
+已安装插件统一位于安装根，每个插件独立目录，版本继续分目录；配置与业务数据独立保存：
+
+```text
+packages/                         # --install-dir，可指定其他统一安装根
+  <plugin-id>/
+    <version>/
+      plugin.toml
+      README.md                   # 可选：用途、配置、权限与使用说明
+      <plugin-executable>
+      checksums.json
+data/                            # --data-dir；与安装根分离
+  plugins/<plugin-id>/
+    config.toml
+    data/
+```
+
+同一插件可保留多个已安装版本，启用和热重载显式选择版本。WebUI 的已安装包列表可按插件及版本读取“插件说明”；README 以转义纯文本展示，不执行 HTML、不加载文档中的远程资源。插件作者应把 README 放在包根，再执行安装，使其纳入版本包的校验清单；缺少 README 的旧包仍可正常管理。
+
 基础管理（宿主已运行时，在另一终端执行）：
 
 ```sh

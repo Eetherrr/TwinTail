@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { Api, ApiError, assertSafeNumbers, explain, label, parseConfiguration, type Configuration, type Json, type Operation, type Package, type Plugin } from './api'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { Api, ApiError, assertSafeNumbers, explain, label, parseConfiguration, type Configuration, type Json, type Operation, type Package, type Plugin, type PluginReadme } from './api'
 
 type Page = 'overview' | 'plugins' | 'operations' | 'diagnostics'
 type Editor = { data: Configuration; schema: Json; text: string; original: string; notice: string; error: string; pending?: string }
@@ -18,6 +18,30 @@ const logs = ref<LogEntry[]>([]), diagnosticError = ref(''), adapterError = ref(
 let timer: ReturnType<typeof setInterval> | undefined
 let diagnosticBusy = false
 let installedAt = 0
+const readme = ref<PluginReadme | null>(null), readmeLoading = ref(false), readmeError = ref('')
+let readmeRequest = 0
+function clearReadme() {
+  readmeRequest++
+  readme.value = null; readmeLoading.value = false; readmeError.value = ''
+}
+// Selection changes invalidate pending reads synchronously, before the new version is rendered.
+watch([selected, selectedVersion], clearReadme, { flush: 'sync' })
+const installedSelection = computed(() => packages.value.some(p => p.id === selected.value && p.version === selectedVersion.value))
+async function loadReadme() {
+  if (!authenticated.value || !installedSelection.value || readmeLoading.value) return
+  clearReadme()
+  const request = readmeRequest, epoch = api.epoch
+  const payload = { id: selected.value, version: selectedVersion.value }
+  const isCurrent = () => request === readmeRequest && epoch === api.epoch && authenticated.value
+    && payload.id === selected.value && payload.version === selectedVersion.value
+  readmeLoading.value = true
+  try {
+    const result = await api.readme(payload)
+    if (isCurrent()) readme.value = result
+  } catch (e) {
+    if (isCurrent() && !(e instanceof ApiError && e.code === 'StaleSession')) readmeError.value = explain(e)
+  } finally { if (isCurrent()) readmeLoading.value = false }
+}
 const current = computed(() => plugins.value.find(p => p.id === selected.value))
 const versions = computed(() => packages.value.filter(p => p.id === selected.value))
 const editor = computed(() => editors[selected.value])
@@ -31,6 +55,7 @@ const recentOps = computed(() => [...operations.value].reverse())
 const pretty = (value: unknown) => JSON.stringify(value, null, 2)
 const time = (value?: number) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—'
 function resetSession(message = '') {
+  clearReadme()
   installedAt = 0
   authenticated.value = false; token.value = ''; api.invalidate(); writeAllowed.value = false; error.value = message
   plugins.value = []; packages.value = []; operations.value = []; logs.value = []; adapter.value = undefined
@@ -190,7 +215,7 @@ onMounted(async () => {
   finally { booting.value = false }
   timer = setInterval(() => { void refresh(); if (page.value === 'diagnostics') void diagnostics() }, 2500)
 })
-onUnmounted(() => { if (timer) clearInterval(timer) })
+onUnmounted(() => { clearReadme(); if (timer) clearInterval(timer) })
 </script>
 
 <template>
@@ -212,6 +237,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
           <section v-if="showInstall" class="panel install-panel"><h2>安装本地插件包</h2><p class="muted">输入宿主所在设备上的完整目录路径。安装不会自动授予权限。</p><form class="inline-form" @submit.prevent="askInstall"><label class="sr-only" for="install-path">插件包目录</label><input id="install-path" v-model="installPath" placeholder="例如 /opt/twintail/packages/my-plugin" required><button class="primary" :disabled="!writeAllowed || busy || !installPath.trim()">检查并安装</button></form></section>
           <section class="panel"><div class="list-toolbar"><div class="tabs" role="tablist" aria-label="插件列表类型"><button role="tab" :aria-selected="listMode === 'running'" :class="{ active: listMode === 'running' }" @click="listMode = 'running'">已启用 <span>{{ plugins.length }}</span></button><button role="tab" :aria-selected="listMode === 'installed'" :class="{ active: listMode === 'installed' }" @click="listMode = 'installed'">已安装 <span>{{ packages.length }}</span></button></div><input v-model="search" class="search" aria-label="搜索插件" placeholder="搜索插件名称或版本…"></div><div class="table-scroll"><table v-if="listMode === 'running'"><thead><tr><th>插件</th><th>版本</th><th>状态</th><th>代次</th><th class="align-right">管理</th></tr></thead><tbody><tr v-for="plugin in visiblePlugins" :key="plugin.id" :class="{ 'selected-row': selected === plugin.id }"><td><strong>{{ plugin.id }}</strong><p v-if="plugin.error" class="error-text">{{ plugin.error.message }}（{{ plugin.error.code }}）</p></td><td class="mono">{{ plugin.version }}</td><td><span class="badge" :data-state="plugin.state">{{ label(plugin.state) }}</span></td><td class="mono">{{ plugin.generation }}</td><td class="align-right"><button class="text-button" @click="choose(plugin.id, plugin.version)">详情 →</button></td></tr><tr v-if="!visiblePlugins.length"><td colspan="5" class="empty compact">没有匹配的已启用插件</td></tr></tbody></table><table v-else><thead><tr><th>插件</th><th>版本</th><th>启用状态</th><th class="align-right">管理</th></tr></thead><tbody><tr v-for="pkg in visiblePackages" :key="`${pkg.id}/${pkg.version}`"><td><strong>{{ pkg.id }}</strong></td><td class="mono">{{ pkg.version }}</td><td>{{ plugins.some(p => p.id === pkg.id && p.version === pkg.version) ? '当前启用' : '已安装' }}</td><td class="align-right"><button class="text-button" @click="choose(pkg.id, pkg.version)">详情 →</button></td></tr><tr v-if="!visiblePackages.length"><td colspan="4" class="empty compact">没有匹配的已安装版本</td></tr></tbody></table></div></section>
           <section v-if="selected" class="panel detail-panel"><div class="panel-heading"><div><p class="eyebrow accent">插件详情</p><h2>{{ selected }}</h2><p>v{{ selectedVersion }} <span v-if="current">· {{ label(current.state) }} · 代次 {{ current.generation }}</span></p></div><button class="text-button" @click="selected = ''">收起 ×</button></div><p v-if="current?.error" class="alert error" role="alert">{{ current.error.message }}（{{ current.error.code }}）</p><div class="detail-actions"><template v-if="current"><button class="secondary" :disabled="!writeAllowed || busy || current.state === 'active'" @click="askAction('plugins.start', selected)">启动</button><button class="secondary" :disabled="!writeAllowed || busy || current.state === 'stopped'" @click="askAction('plugins.stop', selected)">停止</button><label class="sr-only" for="reload-version">重载目标版本</label><select id="reload-version" v-model="selectedVersion"><option v-for="pkg in versions" :key="pkg.version" :value="pkg.version">v{{ pkg.version }}</option><option v-if="!versions.length" :value="current.version">v{{ current.version }}</option></select><button class="secondary" :disabled="!writeAllowed || busy" @click="askAction('plugins.reload', selected, selectedVersion)">重载此版本</button><button class="danger-quiet" :disabled="!writeAllowed || busy" @click="askAction('plugins.disable', selected)">停用插件</button></template><button v-else class="primary" :disabled="!writeAllowed || busy || !versions.find(p => p.version === selectedVersion)" @click="askEnable(versions.find(p => p.version === selectedVersion)!)">授权并启用</button><button class="danger-quiet" :disabled="!writeAllowed || busy || current?.version === selectedVersion" @click="askAction('plugins.uninstall', selected, selectedVersion)">卸载此版本</button></div><p v-if="selected === 'web-admin'" class="alert warning">此插件提供当前管理界面。停止或重载会中断连接；请保留本机 CLI 作为恢复入口。</p>
+            <section class="readme-panel" aria-label="插件 README"><div class="config-title"><div><h3>插件 README</h3><p class="muted">{{ selected }} · v{{ selectedVersion }} · 未验证的插件文档，仅按纯文本显示。</p></div><button class="text-button" :disabled="readmeLoading || !installedSelection" @click="loadReadme">查看 README</button></div><p v-if="readmeLoading" role="status">正在读取 README…</p><p v-else-if="readmeError" class="alert error" role="alert">{{ readmeError }}</p><template v-else-if="readme"><p v-if="readme.filename" class="mono readme-filename">{{ readme.filename }}</p><p v-if="readme.filename === null || readme.content === null" class="muted">此已安装版本未提供 README。</p><p v-else-if="readme.content.length === 0" class="muted">README 内容为空。</p><pre v-else class="readme-content">{{ readme.content }}</pre></template><p v-else class="muted">{{ installedSelection ? '点击查看 README，按需读取此已安装版本的文档。' : '此版本未安装，暂无可读取的 README。' }}</p></section>
             <template v-if="current"><div class="config-title"><div><h3>插件配置 <span v-if="dirty" class="unsaved">未保存修改</span></h3><p class="muted">保存前校验格式，修改会基于当前修订提交。</p></div><button class="text-button" :disabled="configBusy" @click="reloadConfig">重新读取配置</button></div><template v-if="editor"><div class="revision-bar"><span>期望修订 <strong>{{ editor.data.status.desired_revision }}</strong></span><span>已应用修订 <strong>{{ editor.data.status.applied_revision ?? '未确认' }}</strong></span><span class="badge" :data-state="editor.data.status.applied_revision === editor.data.status.desired_revision ? 'active' : 'degraded'">{{ editor.data.status.applied_revision === editor.data.status.desired_revision ? '已同步' : '尚未同步' }}</span></div><p v-if="editor.data.status.applied_revision !== editor.data.status.desired_revision" class="alert warning">期望配置尚未在运行中确认。请检查操作结果，必要时重新启动插件。</p><div class="config-layout"><div><label :for="`config-${selected}`">JSON 配置 <span class="muted">· 编辑基于修订 {{ editor.data.snapshot.revision }}</span></label><textarea :id="`config-${selected}`" v-model="editor.text" class="json-editor" spellcheck="false" aria-label="JSON 配置编辑器"></textarea><p class="field-help">仅保留秘密引用，不在此填写明文秘密。脱敏占位符会被阻止提交。</p></div><aside class="schema-panel"><h4>配置说明</h4><p>插件提供的 JSON Schema，供核对字段与约束。</p><pre v-if="editor.schema">{{ pretty(editor.schema) }}</pre><p v-else class="muted">该插件未提供配置 Schema。</p></aside></div><p v-if="editor.error" class="alert error" role="alert">{{ editor.error }}</p><p v-if="editor.notice" class="alert info" role="status">{{ editor.notice }}</p><div class="config-footer"><span class="muted">配置版本 {{ editor.data.snapshot.config_version }}</span><div><button class="secondary" :disabled="configBusy || busy" @click="validateConfig">校验配置</button><button class="primary" :disabled="!writeAllowed || configBusy || busy || !dirty || !!editor.pending" @click="saveConfig">保存并应用</button></div></div></template><div v-else class="empty compact">{{ configBusy ? '正在读取配置…' : '配置尚未载入，请点击重新读取配置。' }}</div></template>
           </section>
         </template>

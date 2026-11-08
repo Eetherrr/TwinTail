@@ -157,6 +157,11 @@ fn setup(root: &Path, grants: &[&str], method: &str, payload: Value) -> (Host, P
     )
     .unwrap();
     fs::write(source.join("plugin.toml"),format!("id='plugin'\nname='P5 bridge fixture'\nversion='0.1.0'\nprotocol_version=1\nhost_api='^0.1'\nentrypoint='fixture'\nconfig_schema='schema.json'\nargs={}\ncapabilities=['management.read','management.write']\n",serde_json::to_string(&args).unwrap())).unwrap();
+    fs::write(
+        source.join("README.md"),
+        "# Plugin README\n<script>inert</script>",
+    )
+    .unwrap();
     let packages = root.join("packages");
     PackageStore::new(&packages)
         .unwrap()
@@ -391,4 +396,35 @@ fn installed_inventory_ignores_bulk_hashing_and_preserves_plugin_ipc() {
         "active"
     );
     host.shutdown();
+}
+
+#[test]
+fn readme_query_uses_exact_read_permission_and_installed_version() {
+    for (grants, expected) in [
+        (vec![], "err"),
+        (vec!["management.write"], "err"),
+        (vec!["management.read"], "ok"),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut host, trigger) = setup(
+            temp.path(),
+            &grants,
+            "plugins.readme",
+            json!({"id":"plugin","version":"0.1.0"}),
+        );
+        let result = host.raw("plugins.readme", json!({"id":"plugin","version":"0.1.0"}));
+        assert_eq!(
+            result,
+            json!({"filename":"README.md","content":"# Plugin README\n<script>inert</script>","verified":false})
+        );
+        fs::write(trigger, b"go").unwrap();
+        let bridged = wait_result(&host);
+        assert_eq!(bridged["status"], expected, "{bridged}");
+        if expected == "ok" {
+            assert_eq!(bridged["value"], result);
+        } else {
+            assert_eq!(bridged["value"]["code"], "permission_denied");
+        }
+        host.shutdown();
+    }
 }

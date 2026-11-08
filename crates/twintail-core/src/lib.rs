@@ -22,7 +22,7 @@ pub use plan::{HostConfig, PluginEntry, PluginSpec, load_package, load_plan, val
 mod supervisor;
 pub use supervisor::{Limits, PluginStatus, Supervisor};
 
-pub use packages::{InstalledPackage, PackageInventory, PackageStore};
+pub use packages::{InstalledPackage, PackageInventory, PackageReadme, PackageStore};
 
 mod config;
 pub use config::{

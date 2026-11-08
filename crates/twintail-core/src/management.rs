@@ -57,6 +57,7 @@ pub(crate) fn capability(method: &str, payload: &Value) -> Result<&'static str, 
         | "plugins.status"
         | "plugins.installed"
         | "plugins.inspect"
+        | "plugins.readme"
         | "operations.list"
         | "operations.get"
         | "config.get"
@@ -86,6 +87,7 @@ mod tests {
             "plugins.status",
             "plugins.installed",
             "plugins.inspect",
+            "plugins.readme",
             "operations.list",
             "operations.get",
             "config.get",
@@ -122,6 +124,7 @@ mod tests {
             "host.read",
             "actions.call",
             "plugins.list.extra",
+            "plugins.readme.extra",
         ] {
             assert_eq!(
                 capability(method, &serde_json::json!({})).unwrap_err().code,

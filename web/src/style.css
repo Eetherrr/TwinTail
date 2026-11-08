@@ -3,3 +3,4 @@
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 
 .readonly-badge{background:#f6efd9;color:#9b7b39;border-radius:4px;padding:3px 8px;margin-right:12px;font-size:10px}
+.readme-panel{border-top:1px solid #edf0e7;border-bottom:1px solid #edf0e7;padding-bottom:20px}.readme-panel>p,.readme-content{margin:0 25px 12px}.readme-content{max-height:480px;overflow:auto;background:#f8faf5;border:1px solid #e1e6db;border-radius:8px;padding:16px}.readme-filename{overflow-wrap:anywhere;font-size:12px}@media(max-width:760px){.readme-panel>p,.readme-content{margin-left:18px;margin-right:18px}}

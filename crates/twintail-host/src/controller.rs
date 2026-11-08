@@ -1038,6 +1038,7 @@ fn is_query(method: &str) -> bool {
             | "management.overview"
             | "diagnostics.logs"
             | "plugins.inspect"
+            | "plugins.readme"
     )
 }
 fn is_mutation(method: &str) -> bool {
@@ -1077,6 +1078,11 @@ fn query(
         "diagnostics.logs" => Ok(
             json!({"entries":view.operations.iter().map(|operation| json!({"operation_id":operation["id"],"method":operation["method"],"state":operation["state"],"stage":operation["stage"],"timestamp_unix_ms":operation["created_unix_ms"],"result":operation["result"]})).collect::<Vec<_>>(),"limit":MAX_OPERATIONS}),
         ),
+        "plugins.readme" => {
+            let result = PackageStore::new(install)?
+                .readme(field(payload, "id")?, field(payload, "version")?)?;
+            Ok(json!(result))
+        }
         "plugins.inspect" => {
             let id = field(payload, "id")?;
             let version = field(payload, "version")?;
