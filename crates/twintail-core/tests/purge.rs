@@ -406,15 +406,26 @@ fn junction_is_rejected_before_any_package_removal() {
     fs::create_dir(&outside).unwrap();
     fs::write(outside.join("keep"), "untouched").unwrap();
     let junction = temp.path().join("data/plugins/sample/data/junction");
-    assert!(
-        std::process::Command::new("cmd")
-            .args(["/C", "mklink", "/J"])
-            .arg(&junction)
-            .arg(&outside)
-            .status()
-            .unwrap()
-            .success()
-    );
+    // cmd built-ins do not share Rust's support for mixed slash separators.
+    // Normalize only the fixture command arguments, not production validation.
+    fn mkjunction(link: &Path, target: &Path) {
+        fn native(path: &Path) -> String {
+            let path = path.to_str().unwrap().replace('/', "\\");
+            if let Some(unc) = path.strip_prefix(r"\\?\UNC\") {
+                format!(r"\\{unc}")
+            } else {
+                path.strip_prefix(r"\\?\").unwrap_or(&path).to_owned()
+            }
+        }
+        let output = std::process::Command::new("cmd")
+            .args(["/D", "/C", "mklink", "/J"])
+            .arg(native(link))
+            .arg(native(target))
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "mklink failed: {output:?}");
+    }
+    mkjunction(&junction, &outside);
     assert!(
         store
             .prepare_purge("sample", temp.path().join("data"))
@@ -423,15 +434,7 @@ fn junction_is_rejected_before_any_package_removal() {
     assert!(temp.path().join("packages/sample/1.0.0/binary").is_file());
     fs::remove_dir(&junction).unwrap();
     let alias = temp.path().join("alias");
-    assert!(
-        std::process::Command::new("cmd")
-            .args(["/C", "mklink", "/J"])
-            .arg(&alias)
-            .arg(&outside)
-            .status()
-            .unwrap()
-            .success()
-    );
+    mkjunction(&alias, &outside);
     for data_root in [alias.clone(), alias.join("missing/descendant")] {
         let error = store.prepare_purge("sample", data_root).err().unwrap();
         assert_eq!(
