@@ -1,59 +1,118 @@
-# 安全边界
+# 安全边界：哪些保护已经有，哪些仍靠你负责
 
-P4 已完成 Linux 本地验收及指定真实部署范围验证；P3 及 P1/P2 Linux 本地验收已通过；本页描述实际控制和限制。P0 历史见 [ADR 0001](0001-p0-baseline.md)，当前架构见 [ADR 0004](0004-p3-management-config-reload.md) 和[插件 API](../plugin-api/README.md)。
+本页帮助你决定能安装什么插件、管理网页该怎么访问，以及故障后该做什么。最重要的一点是：**TwinTail 目前只适合运行你信任的插件。独立进程不是沙箱，框架里的权限也挡不住同用户恶意程序直接读文件或联网。**
 
-## 信任与权限
+## 先认识几个名字
 
-仅运行操作者信任的本地插件。**独立进程与框架权限不是操作系统沙箱**：插件仍拥有宿主用户的文件、网络和进程权限，同用户代码也可能直接访问本机管理端点。宿主能力仅约束经过宿主协议的方法，不隔离恶意本地代码。
+- **权限 / capability**：插件通过宿主办事时需要的许可。清单是“申请单”，管理员的 grants 才是授权；申请不等于已经获得。
+- **loopback（回环地址）**：例如 `127.0.0.1`，供本机程序连接，不是供其他电脑直接访问的网卡地址。
+- **秘密引用**：配置里保存环境变量名字，例如 `{"$secret":"ENV_NAME"}`，由宿主在交给插件时解析，而不是把令牌明文写在配置中。
+- **结果未知（unknown_outcome）**：发消息等动作可能已经执行，只是回复没有回来；不是“肯定没发出去”。
+- **摘要 / SHA256**：检查文件是否变化的指纹。它不加密内容，也不证明文件来自可信作者。
 
-清单申请与管理员 grants 取精确交集、默认拒绝，无通配符；必需能力未授权时拒绝加载。身份绑定到宿主创建的管道，hello 不可自提权限。P2 提供 bots.register、事件订阅/发布、动作和服务路由。路由绑定源实例身份及代次，动作按 BotRef 定位目标，服务显式选择 provider 与 SemVer。动作/服务授权仍为粗粒度能力；未按动作名、账号、服务方法或参数细分。存储和插件管理能力词汇仍无对应插件RPC。
+## 作为使用者，先记住这五件事
 
-## 包与进程
+1. 只安装可信来源、由你保护的本地插件包。插件进程拥有宿主用户的文件、网络和进程权限，私有数据目录只是组织方式，不是文件系统隔离。
+2. 管理网页默认只给本机使用。当前没有任意网卡监听、远程代理或内建 TLS 部署模式；给它配置令牌不等于可以直接暴露到公网。
+3. 发消息超时或断线后，先检查对方是否收到。宿主、SDK 和适配器不自动重放可能已执行的动作，避免重复发送。
+4. 重载可能断开连接、丢事件。业务数据不会随旧程序恢复而自动回滚；删除前按需冷备份，备份本身也可能包含敏感业务数据。
+5. 网页断开或关闭不撤销已经接纳的操作。先查操作记录，再决定是否重试；保留本机命令行作为网页失效时的救援入口。
 
-校验合法 id、SemVer/API、相对路径、真实包/入口边界及强依赖。拒绝链接、特殊文件、目录穿越、重复身份与超限包。本地目录包使用同根 staging 原子发布、不可覆盖版本和 OS 写锁；SHA256 清单用于损坏检测。包必须在校验至执行期间保持不可变，仍有同用户替换竞争；没有签名、来源认证或归档解包支持。
+操作步骤见[Web 管理指南](../plugin-api/web-admin.md)、[适配器指南](../plugin-api/adapters.md)及[发行与运维](../release/README.md)。下面是精确限制，供部署和排障时核对。
 
-正常运行创建私有数据根；--check 不读写，--validate 读取配置和包但不执行。包与 DATA/plugins/id/data 分离，私有路径命名不构成文件系统沙箱。插件环境默认清空，仅转发 PATH/SystemRoot/WINDIR/TEMP/TMP，P3 将配置中的环境秘密引用在宿主解析后注入配置快照，不把完整宿主环境交给插件；这不限制同用户插件自行访问文件和进程。
+## 插件权限实际管到哪里
 
-P1 自动重启预算 0；failed 需显式 start，真正启动新进程时 generation 增长。只清理和等待直接子进程，**禁止插件派生守护子进程**；没有进程树、Windows job object 或通用后代清理保证。
+宿主把清单申请和管理员 grants 取**精确交集**，默认拒绝，不展开通配符；必需能力未获授予时拒绝加载。调用方身份绑定到宿主创建的管道，插件在 hello 中自报身份不能提高权限。同用户代码仍可能直接访问本机管理端点，因此这些检查不隔离恶意本地代码。
 
-## IPC 与日志
+机器人注册、事件订阅/发布、动作和服务路由绑定来源实例及代次。动作按 `BotRef`（适配器实例加账号）定位；服务明确指定 provider 与 SemVer 接口版本范围。动作/服务权限仍是方法级粗粒度能力，没有按动作名、账号、服务方法或参数细分。存储能力词汇没有对应插件 RPC；普通插件也没有任意插件管理通道。P5 管理桥接是另行授权的例外：精确 `management.read` 与精确 `management.write` 分开，write 不隐含 read，且只允许固定管理方法，不提供 `plugins.call`。
 
-插件单帧上限 8 MiB，先验长度后分配；control/response 独立队列 8/32、入站及命令队列各 32、宿主在途请求 32、插件每连接累计 request ID 4096。默认握手10秒、请求5秒、停止2秒，写入期限2秒。非法关联、超时或连接故障使代次退役，取消后的部分帧连接不复用。队列限额不是完整内存/CPU 沙箱，详见[协议](../plugin-api/protocol.md)。
+事件队列满只影响对应订阅者，并返回 dropped 计数；内存中的事件没有持久重放保证。已入队动作断线/超时报告 `unknown_outcome`，不自动重试。SDK 回调需要协作式让出执行权；插件自行创建的任务由插件取消和回收。详见 [ADR 0003](0003-p2-sdk-routing.md)。
 
-stdout 专用于帧；stderr 以固定4096字节缓冲持续读取并丢弃，仅约束缓冲占用，没有完整日志限速、CPU限制、查询或脱敏展示。错误消息不得含秘密、完整敏感输入或原始插件输出。P3 管理读保留秘密引用，操作记录仅安全摘要；没有秘密保险库、自动轮换或浏览器配置系统。
+## 安装包与进程：有校验，但没有系统沙箱
 
-## 本机管理
+包校验覆盖合法 ID、SemVer/API、相对路径、真实包/入口边界和强依赖。拒绝链接、特殊文件、目录穿越、重复身份和超限包。本地目录包先复制到同根暂存区（staging），再原子发布；已有版本不得覆盖，并使用 OS 写锁。SHA256 清单用于损坏检测，不提供签名或来源认证。**包在校验到执行之间仍需保持不可变**，同用户替换文件的竞争仍在信任边界内；宿主本地安装器不接受归档解包安装，发行归档工具的校验是另一层工具。
 
-Unix DATA 由有效用户拥有且精确0700，management.sock为同用户socket且0600；双方检查peer UID。校验祖先所有者、可写权限及链接，拒绝不安全根；已有目录不自动chmod，既有socket不自动删除，崩溃残留须确认无宿主后手动清理。退出仅清理由当前服务创建且身份未变的端点。
+正常运行创建私有数据根。`--check` 不读写；`--validate` 读取配置和包但不执行。版本包与 `DATA/plugins/id/data` 分离，目录命名不构成沙箱。插件环境默认清空，仅转发 `PATH/SystemRoot/WINDIR/TEMP/TMP`；宿主解析配置中的环境秘密引用后注入配置快照，不把完整宿主环境直接传给插件。这不限制同用户插件自行访问文件和进程。
 
-管理与插件管道独立，1 MiB帧、最多16连接、每连接一次请求、网络读写默认5秒；操作等待期限以代码为准，超时后先查询状态。Windows 受限本机管理已实现且原生 MSVC CI 已通过，具体范围见[平台矩阵](../release/platforms.md)；不据此推断跨用户攻击或所有访问控制情景已实测。
+自动重启预算为 **0**：failed 后需显式 start，真正启动新进程时 generation 增长。当前只清理和等待**直接子进程**，禁止插件派生守护子进程；没有完整进程树、Windows job object 或通用后代清理保证。
 
-## 后续边界
+## 宿主与插件通信的硬限制
 
-P3 提供离线 Schema 校验、配置 CAS/秘密引用和本地包/重载管理；禁止外部 Schema 引用，配置/锁使用私有权限和链接校验。P4 SnowLuma 正向 Universal WS 适配器已实现，P5 Web管理已完成Linux本地验收，采用下述认证、鉴权、CSRF/Origin和CSP边界，仅允许loopback。SnowLuma独立部署，真实QQ及具体版本验收结果以[兼容矩阵](../compatibility/snowluma.md)为准。
+这些限额用于防止通道无限积压，不是完整内存或 CPU 配额。
 
-Windows 管理命名管道为 token user SID 配置 protected DACL，拒绝远程连接，并双向核验对端进程 token SID；首次创建拒绝命名冲突。Windows 原生测试任务已有通过证据，但跨用户拒绝仍未专项实测。该控制不隔离同用户恶意插件。ACK/EOF 传输和取消关闭用于限制管道 flush 任务的生命周期。
+| 项目 | 限制 |
+| --- | --- |
+| 插件单帧 | 8 MiB，先检查长度再分配 |
+| control / response 队列 | 分别 8 / 32 |
+| 入站 / 命令队列 | 各 32 |
+| 宿主在途请求 | 32 |
+| 每条插件连接累计 request ID | 4096，达到预算需显式重启 |
+| 默认握手 / 请求 / 停止期限 | 10 秒 / 5 秒 / 2 秒 |
+| 写入期限 | 2 秒 |
 
-P2 控制、响应和事件分队列；事件投递溢出只影响对应订阅者并返回 dropped 计数。注册、队列和在途转发有界，但内存上限不是完整进程资源隔离。已入队动作断连/超时为 unknown_outcome，禁止自动重试。SDK 回调必须协作式让出执行权，插件自己创建的任务仍由插件取消/回收。详见 [ADR 0003](0003-p2-sdk-routing.md)。
+非法关联、超时或连接故障会使该代次退役；取消后只写了部分帧的连接不复用。stdout 专用于协议帧，调试文字应写 stderr。stderr 以固定 **4096 字节**缓冲读取并丢弃，只有缓冲占用约束，没有完整日志限速、CPU 限制、查询或脱敏展示管线。错误消息不得含秘密、完整敏感输入或原始插件输出。完整格式见[协议指南](../plugin-api/protocol.md)。
 
-## P4 外部连接边界
+## 本机命令行管理的访问限制
 
-adapter-snowluma 只连接配置的单个 self_id 和正向 Universal ws/wss，拒绝URL userinfo/query/fragment；Bearer 通过宿主解析环境引用后仅注入 Authorization。wss 校验服务端证书。配置不导出 Debug/Serialize，状态只返回固定类别与计数，不含端点、凭据、payload或远端错误原文。tungstenite TRACE 会打印原始握手，包使用 log 的 max_level_info/release_max_level_info 编译时移除TRACE/debug，且有秘密捕获回归；该设置影响进程内所有log依赖，不能为排障恢复依赖TRACE。
+### Unix
 
-帧、pending、事件队列及期限均有硬范围。账号不匹配、未知/迟到echo不能完成其他调用；重连不重放已准入动作，超时或断线保守返回 unknown_outcome。事件队列溢出有缺口，WS ping/pong与OneBot heartbeat分开。外部WS失败退避至配置上限后持续尝试直到stop，无jitter和总次数预算；宿主进程自动重启预算仍为0。真实QQ不进入无凭据CI，日志与夹具不得泄漏秘密。具体资源默认与限制见[适配器指南](../plugin-api/adapters.md)。
+DATA 由有效用户拥有且权限精确为 `0700`；`management.sock` 为同用户 socket 且 `0600`，双方检查 peer UID。祖先目录还检查所有者、可写权限和链接。不安全根被拒绝，已有目录不会自动 chmod，既有 socket 不会自动删除。崩溃残留需先确认宿主已退出，再手动清理；退出只清理由当前服务创建且身份未变的端点。
 
-## P5 Web 管理边界（Linux本地验收通过）
+### Windows
 
-web-admin 作为独立受信任插件桥接宿主管理 IPC，默认只监听 `127.0.0.1:17280`；P5不支持任意网卡远程暴露。凭据由宿主环境秘密引用解析，token至少32字节，不写URL、浏览器存储或普通日志。登录使用HttpOnly、SameSite=Strict会话cookie，管理调用另须CSRF与Origin校验。慢请求体在初次认证后仍可能跨越会话期限，管理操作准入前须复查会话；当前会话固定默认3600秒，默认32会话/16执行请求/64TCP连接、64KiB body/10秒请求期限，登录body至多1KiB。严格匹配Host/Origin、拒绝query和跨站来源，静态响应配置CSP与no-store；无远程代理/TLS部署模式。具体上限见Web指南；Linux HTTP/CLI与真实Chromium桌面/手机验收通过，Windows运行、远程部署及人工视觉审查不在该结论范围。
+本机命名管道按 token user SID 配置 protected DACL，拒绝远程连接，双向核验对端进程 token SID；首次创建拒绝命名冲突。ACK/EOF 传输及取消关闭用于限制管道 flush 任务生命周期。Windows x64 MSVC 原生 CI 已有通过证据，但**跨用户拒绝没有专项实测**，也不隔离同用户恶意插件。具体范围见[平台矩阵](../release/platforms.md)。
 
-POST manage 桥接按具体管理操作要求 exact `management.read` 或 exact `management.write`；write不隐含read。浏览器认证不替代宿主权限，未知管理方法不能进入任意转发通道；桥接不提供 plugins.call。adapter.status 只返回连接状态有限字段。config.get/schema 通过 ConfigStore 的 read_for_management / validate_management_input 实施 Schema writeOnly 边界：秘密字段仅接受环境引用，不返回resolved值。admin_token/access_token 标记 writeOnly；旧字面量秘密在Web路径安全拒绝，需CLI迁移，不返回可被写回的占位符。组合Schema秘密约束保守合并。管理日志仅限最多128条的有界脱敏操作journal投影，不包括插件stderr、消息正文或凭据。安装、配置和重载沿用宿主校验、CAS与操作状态，不由浏览器直接写文件。
+### 两个平台共同的限制
 
-端口占用、配置拒绝、自停和重载失败保留独立本机CLI恢复入口。关闭页面不会回滚已接纳操作；页面断开后先查询operation。Web自身停止/排他替换可导致HTTP断连，不保证零停机。完整操作和恢复路径见[Web管理指南](../plugin-api/web-admin.md)，测试结果在[兼容记录](../compatibility/README.md)取得证据后填写。
+管理通道与插件管道分开：帧上限 **1 MiB**，最多 **16** 条连接，每连接一次请求，网络读写默认 **5 秒**。操作等待期限以实现为准；超时后先查询状态，不把超时当作撤销。
 
-## P6候选与反向连接边界
+## 配置和秘密不会自动变成保险库
 
-项目已获 MIT 公开发行授权，仓库含 LICENSE、第三方许可正文与再分发声明，v0.1.0 已公开发布；实际附件与校验摘要以 [GitHub Release](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.0) 为准。候选打包工具仍只生成、验证候选，不自动执行公开发布；候选工具的 `public_release: false` 不代表仓库或既有 Release 尚未公开。摘要不等于签名或来源认证，第三方依赖许可与项目 MIT 许可分别保留。相关策略见[安全与依赖升级](../release/security-updates.md)。
+P3 已有离线 Schema 校验、修订冲突检查（CAS）、秘密引用和本地包/重载管理。外部 Schema 引用被禁止，配置与锁使用私有权限和链接检查。管理读取保留秘密引用，操作记录只保存安全摘要；没有秘密保险库或自动轮换。
 
-reverse_ws只绑定数字loopback，默认127.0.0.1:17281，非loopback即使配置token也拒绝。精确路径默认/onebot/v11，不接受query；要求精确单X-Self-ID匹配配置账号与单X-Client-Role: Universal。可选token存在时只接受精确单Authorization: Bearer TOKEN，重复头不能绕过认证。仅一条活动socket，额外连接拒绝，通常返回HTTP409；409为best-effort try_write后drop，避免恶意附加peer阻塞主连接，不保证所有网络下客户端都收到HTTP响应。token不匹配401，账号/role/path不匹配403；bind冲突InvalidConfig，stop需join释放监听。重连连接generation增长，在途断线/超时UnknownOutcome且不重放；错误不回显远端正文/token。无native TLS、split或HTTP，远端接入只通过外部SSH隧道映射loopback。
+Web 路径通过 ConfigStore 的 `read_for_management` / `validate_management_input` 执行 Schema `writeOnly` 边界：秘密字段只接受环境引用，不返回解析值。`admin_token/access_token` 标记为 writeOnly；旧字面量秘密配置在 Web 路径被拒绝，需通过 CLI 迁移，不返回可被误写回的脱敏占位符。组合 Schema 的秘密约束保守合并。
 
-上述按P6实现合同核对；负责人报告反向mock、真实SDK子进程闭环及同端口reload重绑定通过，最终全工作区源码回归通过，不扩大已有真实SnowLuma结论。发行/状态/合同与soak工具及平台执行范围见[候选发行](../release/README.md)，备份可能含敏感业务数据，不能把摘要当作加密或签名。
+## SnowLuma 外部连接的保护与缺口
+
+SnowLuma 独立部署，真实 QQ 和具体版本实测只按[专项矩阵](../compatibility/snowluma.md)解释。正向和反向共用事件/动作限额、连接代次和结果未知规则，不能据此推断真实产品的所有行为已验证。
+
+### 正向连接：TwinTail 主动连接 SnowLuma
+
+适配器只连接配置的单个 `self_id` 和正向 Universal `ws/wss`，拒绝 URL 中的 userinfo、query、fragment。Bearer 由宿主解析环境引用后仅注入 Authorization；`wss` 校验服务端证书。配置不导出 Debug/Serialize，状态只返回固定类别和计数，不含端点、凭据、payload 或远端错误原文。
+
+`tungstenite` TRACE 会打印原始握手，因此包使用 `log` 的 `max_level_info/release_max_level_info` 在编译时移除 TRACE/debug，并有秘密捕获回归。该设置影响进程内所有 log 依赖，不应为排障恢复依赖 TRACE。
+
+帧、pending、事件队列和期限均有硬范围。账号不匹配、未知或迟到 echo 不能完成其他调用；重连不重放已准入动作。队列溢出会形成事件缺口，WS ping/pong 与 OneBot heartbeat 分开。外部 WS 失败后退避至配置上限并持续尝试直到 stop，**没有 jitter 或总次数预算**；这与宿主进程自动重启预算 0 是两回事。真实 QQ 不进入无凭据 CI，日志和夹具不得泄漏秘密。资源默认值见[适配器指南](../plugin-api/adapters.md)。
+
+### 反向连接：SnowLuma 主动连接 TwinTail
+
+`reverse_ws` 只绑定数字 loopback，默认 `127.0.0.1:17281`；即使有 token 也拒绝非 loopback。路径默认 `/onebot/v11`，精确匹配且不接受 query。必须有精确单个 `X-Self-ID` 匹配配置账号，以及单个 `X-Client-Role: Universal`。若配置 token，只接受精确单个 `Authorization: Bearer TOKEN`，重复头不能绕过认证。
+
+只允许一条活动 socket。额外连接被拒绝，通常 HTTP **409**；409 是 best-effort `try_write` 后 drop，避免附加 peer 阻塞主连接，不保证所有网络下客户端都收到 HTTP 响应。token 不匹配为 **401**，账号、role 或 path 不匹配为 **403**；bind 冲突为 `InvalidConfig`，stop 需 join 释放监听。重连 connection generation 增长；在途断线/超时为 `UnknownOutcome`，不重放，错误不回显远端正文或 token。
+
+没有 native TLS、split 或 HTTP；远端接入只通过外部 SSH 隧道映射 loopback。反向 mock、真实 SDK 子进程闭环及同端口 reload 重绑定已有本地证据，**真实 SnowLuma 反向部署仍未验证**。
+
+## 管理网页的访问与内容限制
+
+`web-admin` 是受信任的独立插件，默认 `127.0.0.1:17280`，仅数字 loopback；没有任意网卡远程暴露、远程代理或 TLS 部署模式。凭据由宿主环境秘密引用解析，token 至少 **32 字节**，不写 URL、浏览器持久存储或普通日志。
+
+登录使用 HttpOnly、SameSite=Strict 会话 Cookie，管理调用还要通过 CSRF 与精确 Origin 检查。严格匹配 Host/Origin，拒绝 query 和跨站来源，静态响应配置 CSP 与 no-store。CSP 不允许远端或内联脚本，Vue 文本转义插件内容，不执行包内 HTML 或脚本。
+
+| 项目 | 默认值或上限 |
+| --- | --- |
+| 会话期限 | 固定默认 3600 秒 |
+| 会话 / 执行请求 / TCP 连接 | 默认 32 / 16 / 64 |
+| 请求体 / 登录请求体 | 64 KiB / 至多 1 KiB |
+| 请求期限 | 10 秒 |
+
+慢请求体可能跨越会话期限，因此管理操作准入前要复查会话。浏览器认证不替代宿主授权；未知方法不进入任意转发通道。`adapter.status` 仅返回有限连接字段。管理日志只显示最多 **128 条**有界脱敏操作 journal 投影，没有插件 stderr、聊天正文或凭据。安装、配置和重载沿用宿主校验、CAS 和操作状态，不由浏览器直接写文件。
+
+端口占用、配置拒绝、自停或重载失败均保留 CLI 恢复入口。Web 自身排他替换会导致 HTTP 断连，不保证零停机。完整恢复步骤见[Web 管理指南](../plugin-api/web-admin.md)。
+
+## 发行、备份与历史验证证据
+
+项目采用 MIT，仓库带 LICENSE、第三方许可正文与再分发声明；`v0.1.0` 已公开发布，实际附件和摘要以 [GitHub Release](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.0) 为准。候选工具的 `public_release: false` 只描述候选生成，不表示仓库或既有 Release 未公开；候选生成本身不执行公开发行。新增 Release 自动化与既有发行是不同事项，尚未远端实跑的流程不写成通过。
+
+项目 MIT 许可和第三方分发义务分别保留。摘要不是签名、来源认证、加密或敏感备份保护；依赖更新和备份工具的具体边界见[安全与依赖升级](../release/security-updates.md)及[发行入口](../release/README.md)。
+
+历史 Linux 本地验收包括 P1–P3、P4 指定真实部署范围、P5 HTTP/CLI 与 Chromium 桌面/手机自动化，以及 P6 本地候选和反向连接合同。P5 浏览器证据没有人工视觉审查，不代表 Windows Web 专项运行或远程部署验收；P6 mock 也不扩大真实 SnowLuma 结论。后来取得的原生平台 CI 与各阶段历史记录分开保存，具体日期、源码、命令和限制见[兼容性记录](../compatibility/README.md)。

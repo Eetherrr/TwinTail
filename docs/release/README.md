@@ -1,22 +1,42 @@
-# 发行与运维
+# 下载、部署与发行
 
-TwinTail 采用 MIT，源码位于公开仓库的 main 分支，[v0.1.0 Release](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.0) 已发布 Linux x86_64 附件及校验记录。main 的后续功能以 CHANGELOG 的 Unreleased 为准，不自动进入已有附件。本文介绍部署、插件发布和候选校验；Cargo registry 发布不属于现有 GitHub 发行流程。具体平台和真实 SnowLuma 范围分别以验证矩阵及兼容性记录为准。
+想把 TwinTail 跑起来，先选适合自己的程序来源；想给别人提供新版本，再看构建和发行说明。TwinTail 使用 MIT 许可证，源码位于公开仓库 main 分支，[v0.1.0 Release](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.0) 已发布 **Linux x86_64** 附件。main 的新功能不自动进入旧附件，使用时请核对版本。
 
-| 文档 | 使用场景 |
+## 我只是想用，应该从哪里开始？
+
+1. **下载现成程序**：到 Release 页面选择与你的系统和 CPU 架构相符的附件；只有源代码归档而没有对应二进制时，不要把其他平台的包当作可直接运行的程序。v0.1.0 已公开的二进制仅 Linux x86_64。
+2. **核对下载**：比较页面提供的 SHA256 与下载文件，再按[运维指南](operations.md)解包、设置独立数据根。SHA256 是文件“指纹”，用于检查下载损坏或内容变化，不是发行者签名。
+3. **先跑一个示例**：[快速开始](../plugin-api/quickstart.md)从源码运行不需要 QQ 的 mock/echo 示例。
+4. **接入真正机器人**：自行部署和登录 SnowLuma，再按[适配器指南](../plugin-api/adapters.md)连接它的 OneBot 服务。需要网页管理时另装 [web-admin](../plugin-api/web-admin.md)。
+
+预编译包包含宿主、插件程序、白名单文档与工具，不是完整源码仓库。使用 `cargo build` 或 Cargo 示例（插件合同测试、负载测试等）需要取得**同版本完整源码**；不要在解包目录期待缺失的源码自行出现。Python 状态工具只依赖标准库，但仍受 Unix/停机限制。
+
+## 这些发行名词是什么意思？
+
+| 名称 | 含义 |
 | --- | --- |
-| [用户运维](operations.md) | 首次部署、健康判断、升级与故障恢复 |
-| [插件发布](plugins.md) | 插件候选构建、合同、包检查和迁移 |
-| [安全与依赖升级](security-updates.md) | MIT发行许可、依赖变更与秘密处理 |
-| [平台验证矩阵](platforms.md) | 区分实现、交叉检查和目标平台运行证据 |
+| 版本 tag | 指向某个源码提交的版本标签，例如 `v0.1.0`；不是运行配置 |
+| 归档 / 制品 | 构建出的程序和文件，通常压成 `.tar.gz` 或 `.zip` 供下载 |
+| 本地待发布包（工具标记为 candidate） | 尚待复查的构建结果；能打包不等于已发布或业务可用 |
+| Actions artifact | 工作流临时保存的构建结果，不等于公开 Release 附件 |
+| Release 草稿 | GitHub 上尚未公开的发行记录，需要人工审核后发布 |
+| 平台验证 | 在指定系统/架构上实际执行了哪些检查；编译、启动和真实 QQ 业务是不同层次 |
 
-现有[真实SnowLuma范围](../compatibility/snowluma.md)保持P4指定部署结论，不扩展为reverse或其他OS认证。P5浏览器本地验收也不表示真实QQ动作通过。
+## 按任务找说明
 
-项目根 LICENSE、Cargo 许可元数据与发行清单已采用 MIT；再发布制品时须保留项目许可和第三方声明，并重新执行 stage/verify。第三方依赖的版权与再分发义务仍独立核对，MIT决定不扩大平台或真实产品验证范围。
+| 你要做什么 | 阅读 |
+| --- | --- |
+| 安装、日常检查、升级和数据备份 | [用户运维](operations.md) |
+| 从源码生成包，给插件做测试 | [构建与交付](plugins.md) · [插件合同工具](../plugin-api/contract-tools.md) |
+| 用 GitHub Actions 构建新版本并准备草稿 | [自动化发行](automation.md) |
+| 核对某平台究竟测过什么 | [平台矩阵](platforms.md) · [真实 SnowLuma 范围](../compatibility/snowluma.md) |
+| 审查依赖、凭据和许可 | [安全与依赖升级](security-updates.md) · [历史依赖审查](dependency-audit.md) |
+| 本地预览或部署文档网站 | [网站维护与审查记录](project-review.md) |
 
-发行工具已落盘：`python3 tools/release/release.py --help`，build/stage/archive/verify用法见[插件候选](plugins.md)。输出固定标记candidate、public_release=false、runtime_verified=false；目标运行与许可判断由独立报告给出，不能从摘要通过推断。
+## 发布者需要保留的边界
 
-合同工具见[合同与有界soak](../plugin-api/contract-tools.md)。
+发行工具入口是 `python3 tools/release/release.py --help`，构建、整理文件、压缩和校验步骤见[构建与交付](plugins.md)。工具报告固定保留 `channel=candidate`、`public_release=false`、`runtime_verified=false`：这些字段描述打包工具自身的证据，不会因为另外公开了 Release 就自动改写为业务验证通过。
 
-候选安全审查与未解决gate见[依赖与安全审查](dependency-audit.md)。
+新的 Release 自动化已实现，**尚未取得完整发行运行通过的记录**。手动入口仅构建并上传 review artifacts；tag 入口在检查完成后仅创建草稿，公开发布仍需人工审核。它不自动发布 Cargo registry，也不修改现有 v0.1.0。
 
-候选包含binary、白名单文档和工具脚本，不是完整源码checkout。release build与Cargo合同/soak示例命令必须在同版本完整源码仓库运行；不能进入解包目录后直接执行Cargo命令并期待缺失源码可构建。state脚本仅依赖Python标准库，仍受Unix/停机边界约束。
+再分发制品应包含项目 MIT 许可与需要的第三方声明，并重新执行 stage/verify。Linux/Windows 原生 CI、浏览器测试和真实 QQ 连接分别记录，任何一项都不扩大其他项的结论；反向真实 SnowLuma 尚未验证。

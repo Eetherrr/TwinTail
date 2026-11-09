@@ -1,5 +1,7 @@
 # 本地候选打包工具
 
+GitHub tag 触发的三平台构建与草稿流程见[自动化 Release](../../docs/release/automation.md)。本文件说明底层打包工具；工具本身仍不执行网络发布。`automation.py` 为工作流提供版本验证及三平台汇总，`collect --help` 可查看接口。
+
 Python 3.11+，仅使用标准库。当前 workspace 0.1.0 为工程版本，产物始终是 `channel: candidate`、`public_release: false`、`license_gate: MIT`、`license: MIT`。项目已由权利人授权采用 MIT，候选必须携带 `LICENSE`、`THIRD_PARTY_NOTICES.md` 和第三方许可正文；第三方依赖继续按其各自许可使用。工具不上传、不打 tag、不执行 cargo publish，远端发行由独立授权流程执行。参见[发行指南](../../docs/release/README.md)。
 
 从仓库根目录运行；所有输出必须是受信任用户独占的私有目录中的新路径。不要让其他用户并发写入输入、输出及其父目录。预存输出、符号链接和 Windows reparse point/junction会拒绝；标准库检查和 rename 不能防止同用户恶意并发替换路径。构建不检查整个 Cargo 缓存目录树，stage 只读取指定的五个最终二进制。

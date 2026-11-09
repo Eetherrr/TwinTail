@@ -1,6 +1,19 @@
-# 手工验证与排障
+# 排障：从包检查到一条完整回复
 
-当前状态为 **P1 Linux 本地验收通过**。以下流程用于 Unix 本地验证，依赖已安装的固定 Rust 工具链；Windows 本机管理已实现并通过交叉编译/Clippy，Windows 运行验证待执行。
+遇到“程序已启动却没回复”，按包路径、握手、权限、订阅、动作结果的顺序缩小范围，比反复重启更容易定位。本页先列检查入口，再保留直接测试协议的夹具流程；写业务插件无需从夹具入手。
+
+前置知识：先完成[快速开始](quickstart.md)或[第一个插件](first-plugin.md)。诊断输出中的 `generation` 标识具体一次进程启动；`operation_id` 标识管理任务，查任务成功后仍要核对实际插件状态和业务结果。
+
+## 推荐检查顺序
+
+1. 用 `--validate` 验证包路径、清单和依赖；`--check` 不读取插件计划。
+2. 宿主运行后用 `plugins list`、`plugins status ID` 查看状态与结构化错误。
+3. 检查 [Hello](sdk-reference.md#hello与initialize) 是否和清单一致，以及[权限交集](permissions.md)。
+4. 对照 [echo 示例](../../examples/echo-plugin/src/main.rs)，确认 `start` 已订阅、事件类型精确匹配、消息含必需参数。
+5. `mock.emit` 成功只代表入队；只重新查询 `mock.actions` 等待结果，不重复注入消息。真实适配器还需查看[适配器状态](adapters.md)。
+6. 更新或重载之后查询 operation，再核对 desired/applied 和新 BotRef。详见[配置](configuration.md)与[热重载](hot-reload.md)。
+
+下面的命令是 Unix shell 流程，使用仓库固定工具链。Windows 原生 CI 的实际范围见[平台矩阵](../release/platforms.md)，并不表示这些 Unix 命令可直接用于 PowerShell。
 
 ## 无 SDK 测试 fixture
 

@@ -1,5 +1,5 @@
 site_name: TwinTail
-site_description: 以 Rust 为核心，一切皆插件的 QQ Bot 框架。
+site_description: 用 Rust 开发 QQ 机器人，安装插件、管理功能，从运行示例到编写自己的插件。
 site_url: https://Eetherrr.github.io/TwinTail/
 repo_url: https://github.com/Eetherrr/TwinTail
 repo_name: Eetherrr/TwinTail
@@ -82,18 +82,20 @@ nav:
       - 运维与冷备恢复: release/operations.md
       - 错误诊断: plugin-api/troubleshooting.md
   - 开发者:
-      - 插件 API 总览: plugin-api/README.md
-      - 清单与静态计划: plugin-api/manifest.md
-      - IPC 协议: plugin-api/protocol.md
-      - 生命周期: plugin-api/lifecycle.md
+      - 插件开发从这里开始: plugin-api/README.md
+      - 从零写第一个插件: plugin-api/first-plugin.md
+      - SDK API 详细参考: plugin-api/sdk-reference.md
+      - 插件信息与启动配置: plugin-api/manifest.md
+      - 插件和宿主如何通信: plugin-api/protocol.md
+      - 启动、停止与回调: plugin-api/lifecycle.md
       - 事件: plugin-api/events.md
       - 动作: plugin-api/actions.md
       - 服务: plugin-api/services.md
       - 权限: plugin-api/permissions.md
-      - 配置事务: plugin-api/configuration.md
-      - 存储与包管理: plugin-api/storage.md
-      - 热重载: plugin-api/hot-reload.md
-      - 错误契约: plugin-api/errors.md
+      - 读取和修改插件配置: plugin-api/configuration.md
+      - 安装、数据与彻底移除: plugin-api/storage.md
+      - 不重启宿主更换插件: plugin-api/hot-reload.md
+      - 返回错误时怎么办: plugin-api/errors.md
       - 迁移: plugin-api/migration.md
       - 合同与有界负载工具: plugin-api/contract-tools.md
   - 架构:
@@ -109,6 +111,7 @@ nav:
       - 'ADR 0008 · 彻底移除插件': architecture/0008-plugin-purge.md
   - 发行:
       - 发行入口: release/README.md
+      - 自动化 Release: release/automation.md
       - 插件发布: release/plugins.md
       - 安全与依赖升级: release/security-updates.md
       - 依赖审查: release/dependency-audit.md

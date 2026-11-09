@@ -1,0 +1,89 @@
+# 用 GitHub Actions 准备新版本发行
+
+本页给项目维护者说明如何让 GitHub 自动构建下载包，再由人决定是否公开。普通用户下载现有版本请看[发行入口](README.md)。
+
+**当前状态：自动化已实现，但尚未取得三平台打包、汇总及草稿创建全部通过的运行记录。** 下文描述工作流设计与操作方式，不宣称新 Release job 已通过。旧原生 CI 的通过记录见[平台矩阵](platforms.md)，不是这套新发行自动化的运行证据。
+
+## 先认识三个词
+
+- **Actions**：GitHub 上按仓库工作流执行命令的服务，不在你的电脑上运行。
+- **artifact**：一次运行临时保存的构建结果，需要到 Actions 下载；它不是已公开发行附件。
+- **Release 草稿**：尚未公开的发行页面。自动化只准备草稿，最后点击 Publish release 的步骤由维护者完成。
+
+## 选择入口：手动试构建，或 tag 准备草稿
+
+`.github/workflows/release.yml` 提供两种入口：
+
+| 入口 | 行为 |
+| --- | --- |
+| 推送 `v*` tag | 校验版本 → 复用完整 CI → 三平台原生 release 构建与打包 → 汇总摘要 → 创建 GitHub Release **草稿** |
+| Actions → Release candidates → Run workflow | 输入 `vVERSION`，对选定 ref 执行相同校验、构建及汇总，仅上传 Actions artifacts，**不创建 Release** |
+
+手动入口输入的是预期版本，不是额外 checkout 参数；源码由 Run workflow 选择的 ref 决定。tag 必须严格匹配 workspace 与四个插件清单的版本；支持 `v1.2.3` 和 `v1.2.3-rc.1` 等 SemVer，当前底层打包器不支持 `+build` 元数据，前置校验直接拒绝。非法版本在构建前失败。不自动改版本、不自动打 tag、不发布 Cargo registry，不修改现有 v0.1.0。
+
+## 第 1 步：准备源码与版本
+
+1. 更新 workspace 和四个官方/示例插件清单版本，以及适用的锁文件、前端版本与文档示例。
+2. 将 CHANGELOG 的相关 Unreleased 变更整理为正式版本及迁移说明，检查许可、第三方声明和兼容矩阵。
+3. 保证 WebUI 打包静态资源已随源码同步；工作流复用 CI 的 npm 锁定安装、测试、构建与资源漂移检查。
+4. 提交源码，先用手动入口验证选定提交；审核三个平台附件、版本及行为。
+5. 对同一源码创建并推送新 tag。不要移动已有 tag 或复用旧版本名。
+
+```sh
+# VERSION 替换为源码实际版本，例 0.2.0；不应重复推送已发布的 v0.1.0。
+git tag -a vVERSION -m "TwinTail vVERSION"
+git push origin vVERSION
+```
+
+## 第 2 步：在 Actions 查看构建结果
+
+手动预检时，在仓库 Actions → Release candidates → Run workflow 中选择源码 ref，填写与源码一致的 `vVERSION`。运行应先完成版本校验，再进行 CI 与三个平台构建；任何红色失败任务都应先展开日志定位，不直接重复创建 tag。
+
+若工作流列表尚未出现，先确认工作流已经进入远端所选分支；本地保存 YAML 不会让 GitHub 自动看到它。
+
+完整 CI 复用仓库已有 Rust/WebUI 检查。构建分别使用 Linux x86_64、Linux aarch64、Windows x86_64 MSVC 原生 runner，不使用跨编译结果冒充目标运行。每个平台重新执行 release 构建，运行宿主 `--version`、无副作用 `--check`，随后 stage、archive、verify。
+
+Artifacts 包括：
+
+- `candidate-linux-x86_64`、`candidate-linux-aarch64`、`candidate-windows-x86_64`：各平台归档和结构验证 JSON。
+- `release-review-bundle`：三个归档、分平台验证 JSON、外部 `SHA256SUMS` 和生成的发行说明。
+
+Actions artifacts 保留 14 天。tag 运行将汇总文件上传到新建 Release 草稿，正式 Release 附件不受此 Actions 保留期限影响。草稿只会在所有检查和平台包成功后创建；创建前重新解析远端轻量/附注 tag，核对其提交仍等于本次源码 SHA。请在仓库设置中保护版本 tag，校验与创建之间不是原子操作。现有 Release（包括草稿）会阻止覆写。并发发布不自动取消，避免中途取消上传。
+
+汇总重新调用打包工具校验三个归档，拒绝缺失、多余、重复或链接输入，并计算外部下载摘要。验证报告保留 `runtime_verified: false`：归档结构与摘要不是来源认证、签名或完整业务运行证明。原生源码测试及宿主启动 smoke 与归档静态验证是不同证据。
+
+## 第 3 步：审核草稿，再人工公开
+
+在 GitHub Releases 打开草稿，确认：
+
+- tag 与预期源码提交一致，三个目标及 SHA256 齐全；
+- 按 CHANGELOG 补齐用户可读变更、升级/数据迁移说明、已知问题；
+- 在目标环境按需解包、再校验并执行部署/升级测试；
+- 更新验证范围，不把 mock、宿主空启动或 CI 当真实 QQ/SnowLuma 验收；
+- 预发行版本按需勾选 pre-release，确认无误后点击 Publish release。
+
+默认令牌仅需要仓库内的读权限，以及仅 tag push 执行的独立草稿发布 job 的 `contents: write`；不需要个人 PAT。仓库或组织若禁用工作流写入，请由管理员按策略调整。首次创建失败但已留下草稿时，先检查附件是否完整，不自动覆盖或删除；人工处理后再决定重跑，避免改写既有发布。
+
+## 本地验证与限制
+
+```sh
+python3 -m unittest discover -s tools/release -p 'test_*.py'
+python3 tools/release/automation.py validate --tag v0.1.0
+```
+
+`collect` 需要三平台目录，每个目录含一个匹配版本的归档及 `validation.json`，详见工具帮助；输出必须是新目录。
+
+工作流文件进入远端后才能在 Actions 运行。仅本地静态校验不代表三平台 Release job 已实跑；本次实现不自动创建版本 tag、公开 Release 或覆盖旧附件。
+
+
+## 失败时先查哪一层
+
+| 失败位置 | 检查方法 |
+| --- | --- |
+| 版本校验 | tag 是否与 workspace 和四个插件清单一致，是否含不支持的 `+build` |
+| CI / 构建 | 打开失败 job 的实际日志；不要将其他提交的绿色结果当成本次结果 |
+| 汇总 | 三个目标的归档与 validation.json 是否齐全，版本和布局是否一致 |
+| 草稿创建 | 目标 tag 是否仍指向同一提交，是否已存在同名 Release，仓库是否允许 job 写入 |
+| 上传后中断 | 先检查现有草稿与附件，再人工决定处置；不自动覆盖现有发行 |
+
+成功标志应分别记录：Actions 运行 URL 与提交、三个归档及摘要、草稿链接，最后才是人工公开后的 Release 链接。仅有本地单元测试或 YAML 校验结果不属于远端实跑成功。

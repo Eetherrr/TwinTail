@@ -1,4 +1,10 @@
-# IPC v1
+# 进程通信协议：SDK 背后传输了什么
+
+TwinTail 把每个插件当作独立程序，通过其标准输入、标准输出交换 JSON 消息。IPC 就是这种“进程间通信”；帧是给一条消息标明长度的字节块。Rust 插件通常让 SDK 处理它们，无需自己编码。本页适用于编写其他语言 SDK、协议测试或排查握手错误。
+
+前置知识：知道 stdin/stdout、JSON 和异步读写；如果目标只是写 Rust 插件，先读[第一个插件](first-plugin.md)及[SDK 参考](sdk-reference.md)。协议类型、帧读写实现见 [protocol 源码](../../crates/twintail-protocol/src/lib.rs)，生成结构见 [协议 Schema](../../schemas/protocol-v1.json)。Schema 校验结构，宿主仍需校验身份、顺序和权限。
+
+## 一条消息的结构
 
 插件 stdin/stdout 只用于 `4 字节无符号大端长度 + UTF-8 JSON`。长度只计算 JSON，合法范围为 1–8 MiB，先验证长度再分配。stdout 调试文本会破坏连接；stderr 的 P1 行为见[排障](troubleshooting.md)。
 
@@ -17,8 +23,8 @@
 ## 握手
 
 1. 插件发送 control `hello`，payload 含 `plugin_id`、包 `version` 和 `required_capabilities`。
-2. 宿主校验 hello 身份、版本与必需能力集合与清单一致，并校验授予，发送 control `negotiate`，payload 为 `{"major":1,"minor":1}`。
-3. 宿主发送 control `initialize`，payload 为 `instance_id`、`generation`、`granted_capabilities`、`data_dir`、`config_revision`。P1 revision 固定为 0，不表示已有配置事务。
+2. 宿主校验 hello 身份、版本与必需能力集合与清单一致，并校验授予，发送 control `negotiate`，payload 是选定版本，如当前 `{"major":1,"minor":2}`；旧 1.1 连接选择 minor 1。
+3. 宿主发送 control `initialize`，payload 为 `instance_id`、`generation`、`granted_capabilities`、`data_dir`、`config_revision`，以及可选 `config` 快照。早期 P1 的 revision 固定为 0，该历史行为不表示已经支持配置事务；当前字段类型见[SDK 参考](sdk-reference.md#hello与initialize)。
 4. 插件准备完成发送 control `ready`，payload 可为 `{}`；宿主发送 control `activate` 后进入 active。
 
 宿主以启动的管道绑定身份，插件自报身份不能提升权限。默认整个握手期限 10 秒。收到 `initialize` 前不能预知宿主分配的 instance_id、generation 或数据目录；插件必须解析该消息。

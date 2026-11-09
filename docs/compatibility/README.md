@@ -1,12 +1,42 @@
-# 兼容性与验证记录
+# 兼容性：我的环境和用法有实测吗？
 
-本页区分选定的支持目标、尚未执行的检查与已取得的证据。历史 P0 决策见 [ADR 0001](../architecture/0001-p0-baseline.md)，安全限制见[安全边界](../architecture/security.md)，阶段范围见 [SKILL.md](../../SKILL.md)。配置 CI、通过 mock 或外部项目声明均不等于真实平台或 SnowLuma 兼容验证。
+这页帮你判断 TwinTail 在什么系统上跑过、怎样连接过 SnowLuma，以及“通过”具体指什么。**先核对自己的平台、下载版本和连接方式，再读对应证据。** 不必把下面的开发阶段记录当安装教程逐段阅读。
 
-## 当前源码验证入口
+## 先看懂几种“验证”
 
-2026-11-08 源码 `8c3d096` 的 Linux x64、Linux arm64、Windows MSVC 与 WebUI 四项任务全部通过，见[run 42476673350](https://github.com/Eetherrr/TwinTail/actions/runs/42476673350)及[平台矩阵](../release/platforms.md)。下文按日期/阶段保留历史计数，不作为当前提交测试数量。v0.1.0 已公开发行，其附件快照不自动包含 main 后续功能。
+| 名词 | 白话解释 | 能说明什么 |
+| --- | --- | --- |
+| 原生 CI | 在目标系统和架构的自动化机器上构建、运行指定测试 | 证明该次任务列出的范围通过，不代表所有产品场景 |
+| 交叉编译 / Clippy | 在一台机器上检查另一平台的代码 | 证明能通过那种检查，不代表在目标系统真正运行过 |
+| mock / 夹具 | 用模拟服务或脱敏样例代替 QQ 与 SnowLuma | 验证 TwinTail 的解析、路由和故障处理，不证明真实产品兼容 |
+| 真实集成 | 实际连到 SnowLuma 并收发消息 | 只证明指定版本、环境和测试项目；私聊成功不能推导群聊成功 |
+| 候选包 / Release | 准备审核的归档 / 已发布的特定版本附件 | 当前源码的功能和旧附件可能不同，不能混用结论 |
 
-## GitHub 0.1.0发行时原生CI历史记录
+## 当前结论：先按你的问题查
+
+| 你关心的问题 | 已有证据 | 仍需分开确认 |
+| --- | --- | --- |
+| Linux x64、Linux arm64、Windows x64 MSVC 能否构建和运行测试 | 源码 `8c3d096` 的原生 CI 四任务通过，含 WebUI | Unix state 与 Linux CLI 只在 Linux 执行；跨用户权限、全部信号行为、所有部署场景不因此获认证 |
+| 下载 v0.1.0 能得到什么 | 已公开发行，附件仅 Linux x86_64 | main 后续新增功能不自动进入旧附件；其他平台有 CI 不等于有该版本下载包 |
+| 能否连接真实 SnowLuma 收发私聊 | Linux x64 / WSL mirrored 客户端对报告 `2.2.1-node` 的指定部署，正向 WS 私聊和断线重连后业务闭环通过 | 远端 OS/commit/SHA 未知；群聊、其他动作、真实 Bearer/TLS 和其他客户端平台待测 |
+| 反向连接是否可用 | P6 已实现 loopback 反向 Universal WS，有本地 mock 与子进程证据 | 真实 SnowLuma 反向部署未验证；split API/Event 与 HTTP 仍未实现 |
+| 管理网页有没有跑过 | P5 Linux 本地 HTTP/CLI 和 Chromium 桌面、手机自动化通过，后来也有 Web CI | 历史 live 测试未全部在远端执行；没有人工视觉审查、远程部署或 Windows Web 专项验收结论 |
+| 新 Release 自动化是否已完整跑通 | 流程实现和历史源码 CI、既有发行分别记录 | 尚未远端实跑的新流程不算已通过，也不冒充 v0.1.0 的发行过程 |
+
+当前源码证据：2026-11-08，提交 `8c3d096`，见 [run 42476673350](https://github.com/Eetherrr/TwinTail/actions/runs/42476673350)和[平台验证矩阵](../release/platforms.md)。该记录不代表此后每一个工作树改动都已通过同一轮 CI。`v0.1.0` 的附件与摘要以 [GitHub Release](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.0) 为准。
+
+## 接下来该读哪页
+
+- **要运行或打包：**先看[发行与运维入口](../release/README.md)，再核对[平台矩阵](../release/platforms.md)。
+- **要接 QQ：**看[适配器操作指南](../plugin-api/adapters.md)和[SnowLuma 逐项实测矩阵](snowluma.md)。SnowLuma 独立部署，宿主不内嵌登录程序。
+- **要部署管理网页或装第三方插件：**先读[安全边界](../architecture/security.md)。仅回环监听和受信任插件的限制不会因为一般 CI 全绿而消失。
+- **要追查某次验证：**往下读历史证据，保留日期、测试数、来源与当时的待测项。
+
+## 历史验证证据：不用于描述今天仍缺什么
+
+下列 P0–P6 是开发阶段，不是版本号或用户操作顺序。每节保留当时环境、测试计数和未测范围；后来取得原生 CI 不改写当时只做了交叉检查的事实。“工作树尚无 Git 提交”“等待 runner”等也只描述对应历史时点。测试清单数、默认执行数、额外显式执行数分别记录，不相加冒充当前提交的测试数量。
+
+### GitHub 0.1.0发行时原生CI历史记录
 
 源码已以MIT公开推送main；v0.1.0 Release由[发行页面](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.0)实际状态确认，不将draft写成已正式发布。发行附件仅Linux x86_64。本次全绿[run40901049665](https://github.com/Eetherrr/TwinTail/actions/runs/40901049665)对应head `ad3296b09790e3ea497aac39b41957b66aabf3cd`，以下记录独立于P0–P6历史：
 
@@ -16,7 +46,7 @@
 
 这证明列出的native构建/测试范围，不是所有产品行为或长时间运行认证。真实SnowLuma仍仅P4指定部署的正向私聊/重连，reverse未取得真实产品证据。当前矩阵见[平台验证](../release/platforms.md)。
 
-## P6发布加固（Linux本地候选）
+### P6发布加固（Linux本地候选）
 
 本节保留公开发行前的 P6 本地验收记录；当时公开推送与许可同步尚在准备中。当前 MIT、公开源码及 Release 状态见上文，不将当时待办视为当前状态。发行/状态/合同与soak命令已落盘，见发行指南；最终验证计数不沿用P5历史。状态负责人报告Python3.13.5下16项stdlib unittest、py_compile及真实CLI snapshot/verify/restore/重复restore拒绝通过；最低Python3.11本机未运行，CI等待runner。
 
@@ -26,7 +56,7 @@ P6 Linux本地候选源码与工具验收完成：最终fmt、workspace全目标
 
 发行负责人报告18项Python测试和真实Linux五binary release构建通过；最终同输入双stage/归档与系统tar解包verify结果以`dist/release-validation.json`记录为准，不在文档嵌入循环变化的archive摘要。最终Linux release宿主另运行2项opt-in CLI均通过：P4 documented流程6.39秒，P5 authenticated HTTP+CLI救援15.55秒；额外2项不计入默认174项+1 doctest。前端npm ci、24项测试、typecheck/build、asset deterministic及npm audit0通过。Windows GNU全目标交叉Clippy通过（最后仅p4测试锁修改不影响生产，精确最终复验另记），仅交叉检查，非MSVC构建或Windows运行；arm64未运行。当前矩阵见[平台验证](../release/platforms.md)，操作与候选边界见[发行入口](../release/README.md)。
 
-## P5 Web 管理验证（2026-10-29，Linux本地验收完成）
+### P5 Web 管理验证（2026-10-29，Linux本地验收完成）
 
 lead 报告最终Rust源码检查通过：
 
@@ -44,17 +74,17 @@ live浏览器验收发现大体积debug包的plugins.installed全量SHA校验阻
 
 文档负责人另从新私有临时目录执行 `cargo build --locked -p twintail-host -p web-admin`，仅复制binary/manifest/schema，预置revision1环境引用配置，再CLI install/enable：操作completed、插件active、desired/applied均1；静态index200且有CSP、session登录200且cookie HttpOnly、CSRF management.overview200且permissions read/write均true。此次不连接QQ，不代替浏览器关键交互或故障恢复验收。
 
-## 当前 P4 状态
+### 当前 P4 状态
 
 P3 管理、配置与热重载已完成 Linux 本地验收。已有 wire 1.2、版本包存储、配置 Schema/CAS/秘密引用、desired/applied、可查询操作与 exclusive 代次替换。P4 OneBot 类型库和 SnowLuma 正向 Universal WS 适配器已完成 Linux 本地验收及指定真实部署范围验证；P5 Web管理已完成Linux本地验收，最终证据见本文顶部。具体版本、mock及真实逐项证据见 [SnowLuma 专项矩阵](snowluma.md)，运行步骤见[适配器指南](../plugin-api/adapters.md)。
 
-## P4 本地工程验证（2026-10-29）
+### P4 本地工程验证（2026-10-29）
 
 lead 报告 Linux 工程验收通过：workspace **137 项测试及 1 项 rustdoc 示例**；独立 opt-in CLI smoke **1 项通过**（默认测试集 ignored，不计入137项）。Windows 全目标严格 Clippy 交叉检查通过，包含 real_probe 和 CLI smoke 的最终源码；这不表示 Windows 测试运行通过。P3 以下历史记录保留原阶段计数。
 
 真实验收客户端为 Linux x64、WSL mirrored 模式，远端返回 SnowLuma 2.2.1-node（远端 OS/commit/SHA未知）。直接 Transport 查询/登录/一次私聊通过并获用户收件确认；随后 Supervisor+独立adapter+临时feature 经用户断开/恢复转发，观察 generation1→offline→attempts2…6→generation2，再完成 message→host→feature→send_private_msg 一次回复，status=ok、retcode=0、exit=0，用户确认收到回复。P4 在该指定部署范围验收完成；notice/request、群聊、其他动作、Bearer/TLS及部署OS矩阵仍待测。Windows 原生仅握手诊断，不构成真实客户端运行验收。详见 [SnowLuma 专项记录](snowluma.md)。
 
-## P3 本地验证记录（2026-10-29）
+### P3 本地验证记录（2026-10-29）
 
 Linux x86_64，Rust/Cargo 1.99.1；本轮完成以下本地验收。工作树尚无 Git 提交。
 
@@ -68,7 +98,7 @@ Linux x86_64，Rust/Cargo 1.99.1；本轮完成以下本地验收。工作树尚
 
 以下保留 P2/P1/P0 历史验证证据。
 
-## P2 本地验证记录（2026-10-29）
+### P2 本地验证记录（2026-10-29）
 
 Linux x86_64，固定 Rust/Cargo 1.99.1。当前工作树尚无 Git 提交。
 
@@ -82,7 +112,7 @@ Linux x86_64，固定 Rust/Cargo 1.99.1。当前工作树尚无 Git 提交。
 
 以下保留 P1/P0 历史验证证据，不代表当前功能仍限于该阶段。
 
-## 2026-10-29 本地 P1 验证
+### 2026-10-29 本地 P1 验证
 
 Linux x86_64；rustc 1.99.1 (58cf8f9c3 2026-10-13)、cargo 1.99.1 (5f94df478 2026-08-27)。固定 1.99.1 工具链已安装，当前工作树尚无 Git 提交。
 
@@ -93,7 +123,7 @@ Linux x86_64；rustc 1.99.1 (58cf8f9c3 2026-10-13)、cargo 1.99.1 (5f94df478 202
 - `cargo +stable clippy --workspace --all-targets --locked --target x86_64-pc-windows-gnu -- -D warnings` 通过，包含 4 项 Windows 管理测试的编译。Windows 上的运行、DACL 跨用户拒绝和 Ctrl-C 尚待实际 runner；不把交叉编译记为运行通过。
 - 未执行远端 Actions、arm64 与真实 SnowLuma。P1 只监管直接子进程；仅运行受信任插件。
 
-## P0 工程历史基线
+### P0 工程历史基线
 
 | 项目 | P0 决策 | 验证边界 |
 | --- | --- | --- |
@@ -103,13 +133,7 @@ Linux x86_64；rustc 1.99.1 (58cf8f9c3 2026-10-13)、cargo 1.99.1 (5f94df478 202
 | 路径 | `--data-dir` 默认 `./data`，`--install-dir` 默认 `./packages`；相对 cwd | P0 仅解析显示，不读写、不创建目录、不解析配置 |
 | 插件 / IPC / WebUI | 不在 P0 实现范围 | 无可用接口或兼容性承诺 |
 
-## 当前平台与 CI 矩阵
-
-当前平台执行范围以本页新增GitHub发行记录和[平台验证矩阵](../release/platforms.md)为准：Linux x64、Linux arm64与Windows x64 MSVC已取得native CI证据；state与Linux CLI仅在Linux执行。信号行为、真实SnowLuma与发行附件须分别核对，不能从一般测试通过推断所有部署行为。
-
-以下P0工具链记录及各P0–P6段落保留当时实际执行范围，不因后续native CI而改写历史。
-
-## 2026-10-28 本地 P0 验证
+### 2026-10-28 本地 P0 验证
 
 环境：Linux x86_64，`rustc 1.99.1 (58cf8f9c3 2026-10-13)`、`cargo 1.99.1 (5f94df478 2026-08-27)`，由已安装的 `stable` 工具链执行。工作区尚无 Git 提交；记录对应当前 P0 工作树。
 
@@ -123,11 +147,6 @@ Linux x86_64；rustc 1.99.1 (58cf8f9c3 2026-10-13)、cargo 1.99.1 (5f94df478 202
 
 P0 记录时固定版本别名 `1.99.1` 的 rustup 安装仍在下载，因此上述历史证据使用显式 `+stable`；两者预期编译器版本相同，但不把已通过检查描述为已完成固定别名安装。远端 Actions、Windows 和 arm64 的验证状态仍按上表保留。
 
-## SnowLuma / OneBot v11 矩阵
-
-SnowLuma 独立部署，adapter-snowluma 连接其 OneBot 服务，宿主不内嵌 SnowLuma。P4 正向 Universal WS、单账号、Bearer、四类事件和未知扩展、echo/pending、有界重连及停止均已实现；类型夹具、mock WS 与独立进程证据列于 [SnowLuma 专项矩阵](snowluma.md)。Linux 本地验收及指定真实部署的重连后宿主业务私聊闭环已通过；其余真实能力按专项矩阵保留待测。
-
-P6已实现loopback reverse Universal，本地mock/子进程证据不等同真实产品兼容；split API/Event 和 HTTP 传输仍延期。真实产品具体动作、事件、平台和重连行为只按专项矩阵取得的证据填写，不使用“完整支持 OneBot v11”概括未测范围。历史 P0–P3 记录保留当时的功能与验证范围。
 
 ## 后续记录要求
 

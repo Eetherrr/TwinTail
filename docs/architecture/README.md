@@ -1,26 +1,65 @@
-# TwinTail 架构文档
+# TwinTail 为什么这样设计
 
-当前状态：**P3 已完成 Linux 本地验收；P4 OneBot/SnowLuma 已完成 Linux 本地验收及指定真实部署范围验证**。总体设计与后续阶段见 [SKILL.md](../../SKILL.md)，执行约定见 [AGENT.md](../../AGENT.md)，变更历史见 [CHANGELOG](../../CHANGELOG.md)。
+TwinTail 把“管理插件”“连接 QQ”“处理消息”分开，目的是让你能单独替换某个插件，而不必把整个机器人程序一起停掉。本页帮你理解各部分是谁、出了问题该查哪里；日常安装和操作请从[使用文档](../../README.md)进入，不必先读完全部设计记录。
 
-Rust 2024 / resolver 3 workspace 核心 crate：`twintail-protocol` 定义 wire 类型与有界帧 IO；`twintail-core` 实现清单、精确权限交集、依赖加载计划与进程监管；`twintail-host` 组合 CLI、信号退出和本机管理。宿主不依赖某个插件实现。十七份 JSON Schema 由 schemars 导出并可检查漂移。
+## 先认识几个名字
 
-P1 正常运行读取 DATA/host.toml，缺失时为空计划；先绑定管理端点再启动插件，退出时逆序停止。`--check` 保持引导检查、不读写；`--validate` 离线检查包、不执行。基础管理为 plugins list/status/start/stop/call。Unix 本机管理使用私有目录和 peer UID 校验，Windows 等价后端已实现并通过交叉编译/Clippy，运行未验证。
+| 名词 | 白话解释 | 你需要关心什么 |
+| --- | --- | --- |
+| 宿主（host） | 启动插件、分配权限、转送请求的主程序 | 宿主可以不带 QQ 接入或管理网页独立运行 |
+| 插件 | 由宿主启动的独立程序，例如接入 QQ、回复消息或提供管理网页 | 插件可以单独启停；只安装你信任的插件 |
+| 适配器（adapter） | 在 TwinTail 和外部机器人服务之间翻译消息的插件 | `adapter-snowluma` 连接 SnowLuma，不负责 QQ 登录 |
+| OneBot v11 | TwinTail 和 SnowLuma 约定的消息、命令格式 | 支持一种连接方式，不代表支持规范里的每种方式与动作 |
+| IPC / wire | 宿主和插件在本机交换消息的通道 / 消息格式 | 两边需要协商兼容版本；不是把 Rust 对象直接传过去 |
+| 代次（generation） | 每次启动或替换时分配的新编号 | 防止旧插件的回复被误当成新插件的回复 |
+| ADR | 记录“当时为什么这样选”的设计决定 | 是历史档案，不是当前功能清单 |
 
-P2 新增 `twintail-plugin-sdk`、BotRef、有界事件/动作/服务路由，以及 echo/mock 示例。P3 已实现配置事务、安装器与排他热重载。P4 新增 twintail-onebot11 和独立 adapter-snowluma，支持正向 Universal WS；reverse/split/HTTP 延期。P5 新增独立 web-admin、Vue 管理台与有界授权桥接；仅 loopback HTTP、JSON 配置编辑与安全操作诊断，见 [ADR 0006](0006-p5-web-admin.md)。独立进程不构成沙箱；监管只覆盖直接子进程，禁止派生守护子进程。详细契约见[插件 API](../plugin-api/README.md)。
+## 一条消息怎样经过 TwinTail
 
-| 文档 | 内容 |
+1. **SnowLuma 独立运行并负责 QQ 接入。** QQ 登录、账号运维和 SnowLuma 自己的网页不属于 TwinTail。
+2. **适配器收消息。** 它把 OneBot 消息交给宿主，也替业务插件调用发消息等外部动作。
+3. **宿主按权限转送。** 它检查来源、目标和队列容量，再交给订阅了这类消息的业务插件。
+4. **业务插件处理并回复。** 回复仍经过宿主和适配器；普通业务插件不需要直接连接 SnowLuma。
+5. **管理网页走同一套管理规则。** `web-admin` 是独立插件，浏览器通过它操作宿主，不直接改配置文件。文档网站只是说明书，不是这个管理网页。
+
+这意味着你可以更换业务插件而不改 QQ 登录程序，也能在管理网页失效时用本机命令行恢复。独立进程隔开了崩溃，但**不是操作系统沙箱**；插件仍以宿主用户的权限运行，详见[安全边界](security.md)。
+
+## 当前能做什么，哪些事情不要预期
+
+- 已有插件安装与启停、配置校验与修订冲突检查、操作查询，以及先停旧插件再启动新插件的排他热重载。重载可能断线、漏事件或恢复失败，不承诺零停机或自动回滚业务数据。
+- 已有 SnowLuma 正向 Universal WebSocket；也已实现仅本机回环地址监听的反向 Universal WebSocket。**反向实现的本地模拟测试不等于真实 SnowLuma 反向接入已经验收。** split API/Event 和 HTTP 传输仍未实现。
+- 已有独立 Web 管理插件，默认仅本机访问；没有任意网卡远程管理、内建 TLS、原始插件日志查看或多用户角色系统。
+- Linux x64/arm64、Windows x64 MSVC 和 WebUI 已有原生 CI 通过记录，具体执行范围见[平台矩阵](../release/platforms.md)。这不代表全部平台上的真实 QQ 行为、跨用户隔离或长期运行都已实测。
+- `v0.1.0` 已公开发行，附件仅 Linux x86_64；当前 `main` 继续变化。不要把当前文档里的新增能力当成旧附件已有，也不要把新增 Release 自动化尚未远端实跑的流程记成已通过。
+
+## 按你遇到的问题阅读
+
+| 你想弄清楚 | 从这里开始 |
 | --- | --- |
-| [ADR 0001：P0 基线](0001-p0-baseline.md) | 历史工程与空宿主决策，保留 P0 当时的路径语义 |
-| [ADR 0002：P1 插件宿主](0002-p1-plugin-host.md) | P1 协议、包计划、监管和本机管理决策 |
-| [ADR 0003：P2 SDK 与路由](0003-p2-sdk-routing.md) | 路由身份、背压、版本服务和 SDK 并发契约 |
-| [ADR 0004：P3 管理与重载](0004-p3-management-config-reload.md) | 包管理、配置事务、排他替换及恢复 |
-| [ADR 0005：P4 OneBot 与 SnowLuma](0005-p4-onebot-snowluma.md) | 正向 Universal WS、无损类型、有界连接和未知结果 |
-| [ADR 0006：P5 Web 管理](0006-p5-web-admin.md) | 独立HTTP插件、授权桥接、会话与CLI恢复 |
-| [ADR 0007：P6 发布加固](0007-p6-release-hardening.md) | 反向 Universal WS、候选打包、冷备份与负载验证（实施中） |
-| [ADR 0008：彻底移除插件](0008-plugin-purge.md) | 显式确认、全版本与私有数据删除、失败阶段与重试边界 |
-| [适配器指南](../plugin-api/adapters.md) | 构建、打包、配置、启用与连接诊断 |
-| [插件 API](../plugin-api/README.md) | 当前实际 wire、清单、权限、生命周期和排障 |
-| [安全边界](security.md) | 当前已有控制与未覆盖的信任边界 |
-| [兼容性与验证矩阵](../compatibility/README.md) | 平台、阶段及 SnowLuma 证据状态 |
+| 怎么写插件、装包、配置或排错 | [插件开发文档](../plugin-api/README.md) |
+| 为什么有权限仍要信任插件；管理网页能否对外开放 | [安全边界](security.md) |
+| 我的系统与 SnowLuma 用法有没有实测 | [兼容性记录](../compatibility/README.md)、[SnowLuma 专项矩阵](../compatibility/snowluma.md) |
+| 为什么更新配置还要看“期望 / 已应用”；重载失败怎么办 | [ADR 0004](0004-p3-management-config-reload.md)及[热重载指南](../plugin-api/hot-reload.md) |
+| 普通卸载和彻底移除有什么差别 | [ADR 0008](0008-plugin-purge.md) |
+| 打包、备份或发布的操作步骤 | [发行与运维文档](../release/README.md) |
 
-协议、权限、依赖方向、热重载或持久化兼容的重大变更须同步 ADR 与设计。验收结论需具体环境和证据，不能把存在实现或通过 mock 写成已验收/真实外部兼容。
+## 历史设计决定：按问题查，不必顺序通读
+
+以下 P0–P6 是开发阶段编号，不是要你依次执行的安装步骤。各 ADR 保留当时的状态、决策与验收要求；后续取得的证据请查[兼容性记录](../compatibility/README.md)。
+
+| 记录 | 当时解决的问题 |
+| --- | --- |
+| [ADR 0001：P0 工程基线](0001-p0-baseline.md) | 先让不带插件的主程序可构建、可启动、可停止 |
+| [ADR 0002：P1 插件宿主](0002-p1-plugin-host.md) | 安全地启动、识别和监管插件，并建立本机通信规则 |
+| [ADR 0003：P2 SDK 与路由](0003-p2-sdk-routing.md) | 让插件收消息、发动作、互调服务，不把旧回复送给新进程 |
+| [ADR 0004：P3 管理与重载](0004-p3-management-config-reload.md) | 安装版本包、可靠保存配置、替换失败后恢复旧插件 |
+| [ADR 0005：P4 OneBot 与 SnowLuma](0005-p4-onebot-snowluma.md) | 在不把 QQ 登录代码塞进宿主的前提下连接外部服务 |
+| [ADR 0006：P5 Web 管理](0006-p5-web-admin.md) | 提供管理网页，同时保留权限检查和命令行救援 |
+| [ADR 0007：P6 发布加固](0007-p6-release-hardening.md) | 增加反向接入、可校验的候选包、冷备份与有限负载验证 |
+| [ADR 0008：彻底移除插件](0008-plugin-purge.md) | 明确删除全部版本和私有数据的条件、后果与重试方式 |
+
+## 给维护者的代码地图
+
+Rust 2024 / resolver 3 workspace 中，`twintail-protocol` 定义通信类型和有限大小的读写，`twintail-core` 实现权限、依赖计划与进程监管，`twintail-host` 组合命令行和本机管理。`twintail-plugin-sdk` 给插件作者提供封装，`twintail-onebot11` 定义 OneBot 类型。宿主不依赖具体插件实现，协议 Schema 随类型导出并检查是否与源码一致。
+
+协议、权限、依赖方向、热重载或持久化兼容的重大变更应记录新的决定并同步[整体设计](../../SKILL.md)。项目执行约定见 [AGENT.md](../../AGENT.md)，实际变更见 [CHANGELOG](../../CHANGELOG.md)。验证结论必须带环境和证据，不把设计目标、模拟测试和真实产品验收混为一谈。

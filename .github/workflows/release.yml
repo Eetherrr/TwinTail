@@ -1,0 +1,196 @@
+name: Release candidates
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version to validate, e.g. v0.1.0 (build only; never publishes)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Never cancel a publication halfway through uploading its assets.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Validate release identity
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate tag against source manifests
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+        run: |
+          python tools/release/automation.py validate --tag "$RELEASE_TAG"
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+  checks:
+    name: Full source validation
+    needs: version
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  package:
+    name: Package / ${{ matrix.target }}
+    needs: [version, checks]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+            triple: x86_64-unknown-linux-gnu
+            extension: tar.gz
+          - os: ubuntu-24.04-arm
+            target: linux-aarch64
+            triple: aarch64-unknown-linux-gnu
+            extension: tar.gz
+          - os: windows-latest
+            target: windows-x86_64
+            triple: x86_64-pc-windows-msvc
+            extension: zip
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      RELEASE_TAG: ${{ needs.version.outputs.tag }}
+      RELEASE_TARGET: ${{ matrix.target }}
+      RELEASE_TRIPLE: ${{ matrix.triple }}
+      RELEASE_EXTENSION: ${{ matrix.extension }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify pinned Rust toolchain
+        run: rustup show active-toolchain
+      - name: Build release binaries on native runner
+        run: python tools/release/release.py build --target "$RELEASE_TARGET"
+      - name: Smoke test packaged host binary
+        run: |
+          suffix=""
+          if [ "$RUNNER_OS" = Windows ]; then suffix=".exe"; fi
+          "target/$RELEASE_TRIPLE/release/twintail-host$suffix" --version
+          "target/$RELEASE_TRIPLE/release/twintail-host$suffix" --check
+      - name: Stage and verify platform archive
+        run: |
+          version="${RELEASE_TAG#v}"
+          archive="twintail-$version-$RELEASE_TARGET.$RELEASE_EXTENSION"
+          mkdir release-artifact
+          python tools/release/release.py stage --target "$RELEASE_TARGET" --binaries "target/$RELEASE_TRIPLE/release" --output release-stage
+          python tools/release/release.py verify release-stage
+          python tools/release/release.py archive --stage release-stage --output "release-artifact/$archive"
+          python tools/release/release.py verify "release-artifact/$archive" > release-artifact/validation.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate-${{ matrix.target }}
+          path: release-artifact/
+          if-no-files-found: error
+          retention-days: 14
+
+  draft:
+    name: Collect and optionally create draft
+    needs: [version, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ needs.version.outputs.tag }}
+      SOURCE_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: candidate-linux-x86_64
+          path: candidates/linux-x86_64
+      - uses: actions/download-artifact@v4
+        with:
+          name: candidate-linux-aarch64
+          path: candidates/linux-aarch64
+      - uses: actions/download-artifact@v4
+        with:
+          name: candidate-windows-x86_64
+          path: candidates/windows-x86_64
+      - name: Verify all platforms and collect download checksums
+        run: python tools/release/automation.py collect --artifacts candidates --output release-output --tag "$RELEASE_TAG" --commit "$SOURCE_COMMIT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-review-bundle
+          path: release-output/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Create draft (tag only)
+    needs: [version, draft]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ needs.version.outputs.tag }}
+      SOURCE_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-review-bundle
+          path: release-output
+      - name: Create new GitHub Release draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          # Resolve lightweight and annotated remote tags before associating downloads with a source SHA.
+          python - <<'PY'
+          import json, os, urllib.request
+          from urllib.parse import quote
+          base = os.environ['GITHUB_API_URL'] + '/repos/' + os.environ['GITHUB_REPOSITORY']
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'}
+          def get(path):
+              request = urllib.request.Request(base + path, headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+          obj = get('/git/ref/tags/' + quote(os.environ['RELEASE_TAG'], safe=''))['object']
+          for _ in range(16):
+              if obj['type'] != 'tag':
+                  break
+              obj = get('/git/tags/' + obj['sha'])['object']
+          if obj['type'] != 'commit' or obj['sha'] != os.environ['SOURCE_COMMIT']:
+              raise SystemExit('Remote tag no longer matches the tested source commit; publication stopped.')
+          PY
+          # Preserve existing releases and assets: reruns never overwrite v0.1.0 or another publication.
+          python - <<'PY'
+          import json, os, urllib.request, urllib.error
+          from urllib.parse import quote
+          url = os.environ['GITHUB_API_URL'] + '/repos/' + os.environ['GITHUB_REPOSITORY'] + '/releases/tags/' + quote(os.environ['RELEASE_TAG'], safe='')
+          request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  json.load(response)
+          except urllib.error.HTTPError as error:
+              if error.code != 404:
+                  raise
+          else:
+              raise SystemExit('Release already exists; inspect it manually. No assets were overwritten.')
+          PY
+          gh release create "$RELEASE_TAG" release-output/* --verify-tag --target "$SOURCE_COMMIT" --draft --title "TwinTail $RELEASE_TAG" --notes-file release-output/release-notes.md

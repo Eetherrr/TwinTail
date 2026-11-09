@@ -1,10 +1,24 @@
 # ADR 0005：P4 OneBot v11 与 SnowLuma 正向 WebSocket
 
+## 这页帮你理解什么
+
+这份设计记录解决的问题是：**连接 SnowLuma，而不是把 QQ 登录代码塞进宿主**。它说明为什么这样设计，不是要求新用户照着重做当年的开发步骤。
+
+**几个名词先说清楚：**OneBot v11 是机器人程序交换消息与命令的格式；SnowLuma 是独立部署的 QQ 接入程序。正向 Universal WebSocket 指 TwinTail 主动连接，一条持续连接同时收事件和发动作。echo 是请求与回复的关联标记。
+
+**你应该关心：**重点看连接范围和结果未知。下文保留 P4 决策形成时的“实施中”和延期项目；后来 P4 已取得指定真实部署的正向私聊、重连证据，P6 也已实现仅 loopback 的反向 Universal WS，不表示真实反向部署已验证。当前范围见[专项矩阵](../compatibility/snowluma.md)与 [ADR 0007](0007-p6-release-hardening.md)。
+
+实际日期、平台和测试结果请看[兼容性记录](../compatibility/README.md)。
+
+## 历史决策记录
+
+以下保留原记录的状态、阶段与决定；验收要求不是测试通过证明。
+
 - 状态：设计已定，实施中，待实际代码与验收校正
 - 日期：2026-10-29
 - 依据：AGENT.md、SKILL.md、ADR 0003/0004、OneBot v11 公开规范
 
-## 决策
+### 决策
 
 建立独立 `crates/twintail-onebot11` 协议类型库与 `adapters/adapter-snowluma` 插件。协议库不依赖宿主或具体 QQ 登录实现；宿主不链接 SnowLuma 代码。SnowLuma 独立部署，插件只连接它提供的 OneBot 服务。
 
@@ -20,13 +34,13 @@ P4 仅实现正向 Universal WebSocket：适配器作为客户端，在同一 ws
 
 插件注册 `onebot.v11` 版本化服务，提供身份与连接信息；SDK 自定义 request `connection.status` 区分 IPC active 和外部连接可用。具体方法及返回字段以实现校正，秘密与完整含 token URL 不进入诊断。配置、任务和连接生命周期沿用 P3：exclusive 替换，停止时关闭连接、完成 pending 清理并 join 后台任务，旧 BotRef 失效。在线配置可拒绝需要重连的变更，不以 prepare 执行外部副作用。
 
-## 验收与兼容性边界
+### 验收与兼容性边界
 
 无凭据夹具分别验证四类事件、未知字段/CQ 保留、身份不匹配、鉴权、响应分类、echo/代次、背压、断线、超时、retcode 和优雅停止。mock WS 与独立进程闭环仅证明 TwinTail 实现，不能证明真实 SnowLuma 兼容。
 
 真实验收记录 SnowLuma 返回版本、TwinTail 测试源码、客户端平台、传输和日期，对未知运行提交/发行包摘要/远端 OS 明确标未知。2026-10-29 已完成 Linux x64 WSL mirrored 客户端对 SnowLuma 2.2.1-node 指定部署的本地与真实范围验收：直接查询/登录/私聊，以及 Supervisor→独立 adapter→临时 feature 在断线重连后的收消息→业务→单次回复，用户确认收件。远端 OS/commit/SHA 未知，notice/request、群聊、其他动作、真实 Bearer/TLS和其他平台仍待测，不以局部能力外推完整兼容。实际证据与矩阵见[兼容记录](../compatibility/snowluma.md)，作者契约见[指南](../plugin-api/adapters.md)。
 
-## 外部依据
+### 外部依据
 
 - [OneBot v11](https://github.com/botuniverse/onebot-11)
 - [正向 WebSocket](https://github.com/botuniverse/onebot-11/blob/master/communication/ws.md)

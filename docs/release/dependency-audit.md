@@ -1,4 +1,23 @@
-# P6 依赖审计与公开发行门槛
+# 依赖审计记录：发现了什么，结论到哪里
+
+这是一份**历史审计证据**，不是安装教程或持续安全保证。你可以先读下面的结论，再按需要查原始命令和判断依据。部署时的日常做法见[安全与依赖升级](security-updates.md)。
+
+## 先看懂结论
+
+- **依赖**是程序使用的第三方库；**锁文件**固定这次实际采用的版本；**advisory** 是已公开问题公告；**PoC** 是用于复现问题的小测试。
+- 2026-10-29 查询 206 个 Rust registry 依赖，扫描命中一项 `block-buffer 0.10.4`。随后对照锁定源码与公告，相关内联游标损坏在等价运行测试中未复现。**命中保留，范围矛盾也保留**，不是把结果抹成零。
+- 同日 npm 审计报告零项已知漏洞；这是当时数据库和查询范围的结果，不说明未知漏洞不存在。
+- 下文早期快照曾缺少许可材料。后来项目采用 MIT，许可正文与第三方材料已补齐，v0.1.0 也已公开发行；不要把早期“许可门槛未解除”当成今天的产品状态。
+- 此处历史 Windows/arm64“未验证”只指审计当时；后续原生源码 CI 见[平台矩阵](platforms.md)。真实 SnowLuma 反向部署仍未验证。
+
+## 如何复核而不是盲目升级
+
+1. 确认自己的锁文件是否仍与下方摘要相同；不同就属于新输入，应重新扫描并另记日期。
+2. 执行下方命令前确认外部 API 仅接收公开依赖名称和版本，保留原始结果。
+3. 若有命中，核对公告版本范围、实际依赖链与调用方式；不要只为消除告警而强制替换不兼容主版本。
+4. 更新依赖后按[升级策略](security-updates.md)运行受影响回归，记录修复、未解决项和限制。网络或 TLS 失败应修复信任环境，不关闭证书验证。
+
+## 原始审计环境与时间
 
 审计日期：2026-10-29；执行环境为 Linux，Rust 1.99.1、Node v26.7.0、npm 12.2.1。首次 OSV 响应时间为 `2026-10-29T13:28:10.824110Z`（北京时间 21:28:10），复核时间为同日 13:31–13:40 UTC。本文记录一次实际锁文件审计，不代表未来依赖或平台持续安全认证。
 
@@ -65,27 +84,32 @@ npm audit --json
 
 结果：`vulnerabilities` 为空；info/low/moderate/high/critical/total 均为 **0**。报告统计 prod 26、dev 196、optional 55、total 221（类别有重叠，不应求和）。包含开发依赖，未省略 dev。输出另有 npm 提示：`.npmrc allow-scripts` 被 package.json `allowScripts` 覆盖；这不是漏洞命中，本次没有运行安装脚本。零报告不等于依赖没有未知漏洞。
 
-## 版本、许可证与安全政策门槛
+## 历史快照：当时的版本、许可与政策缺口
 
 本次逐一读取根 workspace、9 个 Rust package 的 Cargo.toml、4 个插件清单、web/package.json 与 lock 根记录：版本均为 **0.1.0**；Rust 各包 `publish = false`（直接或继承），前端为 private。wire/config/protocol 的独立版本不要求等于 package SemVer，不作混淆。
 
-初始审计快照未发现根 LICENSE/COPYING/NOTICE/SECURITY 文件，Cargo package/workspace 和前端 package 未声明 license。**公开发行仍被项目授权条款及安全报告政策门槛阻挡**：应由项目负责人决定许可证并补齐原文、各 package 元数据及分发义务；安全政策应说明受支持范围、报告入口与处理流程。审查不替用户选择许可证，不把 `publish=false` 当作候选二进制可以公开分发的授权。本文的缺失结论仅针对上述初始快照。最终复核时文档 owner 已新增根 SECURITY.md，说明候选阶段支持范围、报告所需脱敏证据、运行限制和公开发行门槛；但尚未公布专用私密报告渠道，明确要求先通过已确认私密渠道或托管平台 private vulnerability reporting 联系。LICENSE/COPYING 与 Cargo license 元数据仍未出现，授权门槛未解除。
+初始审计快照未发现根 LICENSE/COPYING/NOTICE/SECURITY 文件，Cargo package/workspace 和前端 package 未声明 license。**公开发行仍被项目授权条款及安全报告政策门槛阻挡**：应由项目负责人决定许可证并补齐原文、各 package 元数据及分发义务；安全政策应说明受支持范围、报告入口与处理流程。审查不替用户选择许可证，不把 `publish=false` 当作候选二进制可以公开分发的授权。本文的缺失结论仅针对上述初始快照。当时最终复核时文档维护者已新增根 SECURITY.md，说明候选阶段支持范围、报告所需脱敏证据、运行限制和公开发行门槛；但尚未公布专用私密报告渠道，明确要求先通过已确认私密渠道或托管平台 private vulnerability reporting 联系。LICENSE/COPYING 与 Cargo license 元数据仍未出现，授权门槛未解除。
 
 本轮未执行完整 SPDX/传递依赖许可证清单审计；不能据 npm 零漏洞或 OSV 请求成功宣称依赖许可证兼容。发行工具如收集第三方元数据，应复核实际落入制品的文件与义务。
 
-## 候选工作流与后续复审
+## 历史快照：待发布包工作流与工具复审
 
 静态核对 `.github/workflows/release-candidate.yml`：Linux x64、Linux arm64、Windows x64 使用对应 native runner，`build --target` 与 stage 的 target triple 一致，native `cargo test --workspace --locked` 不带 `--target` 与其 native ABI 一致。workflow 仅 workflow_dispatch、contents read、upload-artifact，不 tag、不 publish；静态配置不构成这些 runner 已实际通过的证据。
 
 另实际执行 `python3 -m unittest discover -s tools/state -p 'test_state.py' -v` 与 release 对应命令：state **16 项通过**、release **17 项通过**。覆盖链接/特殊文件/恶意路径、目标不覆盖、失败部分写清理、socket 占位、归档完整性和目标架构等；均为合成测试，不替代实际跨平台候选运行。reverse transport 静态核对 loopback 绑定、精确路径/单一身份和鉴权 header、活动连接期间拒绝重复 TCP、握手取消/超时、任务停止及不重放命令，未新增确认缺陷；真实反向 SnowLuma 兼容未在此次审查运行。本文为审计记录，不批准外部发布。
 
-变更记录由 lead 合并至本轮 CHANGELOG；本审查只写本文件，不与其他文档 owner 争用。
+这部分记录保留当时的审查范围和测试数量，不作为后续源码自动通过的依据。
 
 
 ## 审计后授权更新（2026-10-29）
 
-用户随后明确决定项目使用MIT，并授权新建公开GitHub仓库、main分支及0.1.0发行准备。上文许可缺失和未批准外发的结论保留为初始审计快照，不能再作为当前用户授权未定的描述。根LICENSE、Cargo元数据及SECURITY由lead同步，候选工具license_gate改为MIT；发行须将许可文件纳入最终制品并重新校验。本文不宣称GitHub推送或Release已完成，也不将MIT决定扩展为第三方依赖许可兼容审计通过。
+用户随后明确决定项目使用MIT，并授权新建公开GitHub仓库、main分支及0.1.0发行准备。上文许可缺失和未批准外发的结论保留为初始审计快照，不能再作为当前用户授权未定的描述。根 LICENSE、Cargo 元数据及 SECURITY 随后同步，候选工具license_gate改为MIT；发行须将许可文件纳入最终制品并重新校验。本文不宣称GitHub推送或Release已完成，也不将MIT决定扩展为第三方依赖许可兼容审计通过。
 
 最终工具回归为state16项、release18项；上文release17项是审查时运行的历史快照。Windows MSVC/arm64目标运行与真实SnowLuma reverse仍未验证。
 
 发行准备补充：第三方许可库存已覆盖206个Rust锁定版本与25个Web生产安装路径，全部条目附原文；本地缺失的12项文本已从精确版本归档（按Cargo.lock校验）或发布包固定VCS commit补齐。正文见根 THIRD_PARTY_NOTICES.md 与 third-party-licenses/。此为许可材料补齐证据，不扩展前述漏洞审计覆盖范围。
+
+
+## 后续状态说明
+
+MIT 许可与第三方材料已完成并随 v0.1.0 发行；新增 Release 自动化已实现，但尚无完整发行运行通过的记录，其状态见[自动化说明](automation.md)。本页没有重新请求 OSV、重新运行 npm audit、Miri 或真实 QQ 测试；历史命令和测试数字原样作为证据保留，不改写成今天的新审计结果。

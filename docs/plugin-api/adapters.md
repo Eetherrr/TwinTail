@@ -1,10 +1,28 @@
-# OneBot 适配器作者指南
+# 连接 SnowLuma：适配器安装与排查
 
-P4 已完成 Linux 本地验收及指定真实部署范围验证：Linux x64 WSL mirrored 客户端对 SnowLuma 2.2.1-node 的查询/私聊，以及真实重连后 Supervisor→独立 adapter→feature 单次私聊闭环通过，用户确认收件。远端 OS/commit/SHA未知，其余真实能力按兼容矩阵保留待测。`crates/twintail-onebot11` 提供可复用 OneBot v11 类型，`adapters/adapter-snowluma` 是通过 SDK 与宿主通信的独立插件。宿主不链接该适配器，也不处理 QQ 登录或 SnowLuma 私有管理接口。设计依据见 [ADR 0005](../architecture/0005-p4-onebot-snowluma.md)。
+本页帮助你把 TwinTail 接到**已经单独部署的 SnowLuma**，并判断连接是否成功。后半部分给适配器作者保留事件、动作和 SDK 合同。只想体验插件、不准备登录 QQ 时，先运行[无 QQ 示例](quickstart.md)。
 
-## 连接与身份
+## 先知道谁负责什么
 
-P6已实现两种Universal WS传输：forward_ws为默认，适配器作为ws/wss客户端；reverse_ws由适配器在数字loopback监听，OneBot端作为客户端连接。同一连接接收事件和动作响应，split `/api`/`/event` 与HTTP仍延期。使用实际部署配置的地址与路径，不把 OneBot 规范中的端口作为 SnowLuma 默认值。认证通过 Authorization Bearer，秘密采用[配置环境引用](configuration.md)，不能放 URL 查询参数、源码或管理响应。
+- **SnowLuma**：负责 QQ 接入、登录和自己的账号管理；需要你自行部署。TwinTail 不内嵌它，也不替你完成 QQ 登录。
+- **OneBot v11**：两边通信时使用的规则，不是需要再安装一个名为 OneBot 的 QQ 客户端。
+- **adapter-snowluma**：TwinTail 的“翻译插件”，把外部消息交给业务插件，把业务动作发回 SnowLuma。
+- **WebSocket（WS）**：双方保持的一条连接，可以来回收发消息。`wss` 是带 TLS 的 WebSocket。
+- **正向 / 反向**：正向是 TwinTail 主动连 SnowLuma；反向是 SnowLuma 主动连 TwinTail 适配器。这里说的是连接方向，不是消息只能单向发送。
+- **self_id**：这次连接允许使用的机器人账号标识，以字符串配置。**token** 是连接凭据，不是账号，也不要交给浏览器页面或放入 URL。
+
+## 从哪里开始
+
+1. 先部署 SnowLuma、完成它自身的登录，并启用 **OneBot v11 Universal WS** 服务。记下实际地址、路径、账号和是否需要 Bearer token；本文的 `6700` 只是示例，不是 SnowLuma 默认端口承诺。
+2. 准备 TwinTail 完整源码、Rust 1.99.1 与系统构建工具。以下 Bash/Linux 命令从仓库根执行；预编译包用户可使用已有版本包，略过构建/复制部分，但仍需首次私有配置和启用。
+3. 第一次建议使用正向连接：先按下文“构建与首次启用”创建包和配置，再安装、启用和查询。反向模式改用其专节给出的完整配置。
+4. 准备两个终端：第一个一直运行宿主，第二个调用管理命令。秘密变量必须在**启动宿主的终端**设置，后来只在 CLI 终端设置不会改变已运行宿主的环境。
+
+成功要分层判断：安装操作完成 → 插件 active → `connection.status` 的 `connected=true` → 真实业务动作与收件确认。连接成功不等于所有 QQ 功能都已验证。
+
+## 选择连接方式与配置字段
+
+当前已实现两种 Universal WS 传输：forward_ws为默认，适配器作为ws/wss客户端；reverse_ws由适配器在数字loopback监听，OneBot端作为客户端连接。同一连接接收事件和动作响应，split `/api`/`/event` 与HTTP仍延期。使用实际部署配置的地址与路径，不把 OneBot 规范中的端口作为 SnowLuma 默认值。认证通过 Authorization Bearer，秘密采用[配置环境引用](configuration.md)，不能放 URL 查询参数、源码或管理响应。
 
 self_id 配置为字符串。OneBot 边界的整数标识按无精度损失方式接受，不先转浮点数；注册 `BotRef` 时使用宿主分配的 adapter instance 加配置 self_id。入站事件必须匹配该账号，不能从事件自动扩展机器人列表。WS connection generation 用于 echo/pending 隔离，与宿主进程 generation 分别维护；重连不意味着旧调用可迁移。正向模式失败或短连接后退避翻倍至 reconnect_max_ms；连接持续至少 reconnect_max_ms 才将退避复位 initial。当前没有 jitter 和总重试次数预算，对外部 WS 持续重连直到 stop；这不表示宿主自动重启插件进程。
 
@@ -30,9 +48,9 @@ self_id 配置为字符串。OneBot 边界的整数标识按无精度损失方�
 
 包清单声明 config_version = 1、reload_policy = "exclusive"，Schema 位于包内 config.schema.json；Schema 的 default 用作说明，Rust 配置反序列化应用这些缺省值。URL完整约束、token可见ASCII及 reconnect_max ≥ initial 由插件再次校验，不能只凭 Schema 验证成功认定可启动。wss 须验证服务端证书，不使用公开资料查询时的临时证书处理方式连接业务服务。
 
-## 反向Universal WS接入
+## 使用反向 Universal WS 时
 
-P6本地mock与SDK独立子进程闭环已通过，包含同端口重载重绑定；不将其计作真实SnowLuma反向验收。首次私有预置配置仍使用下文安装流程，但完整envelope改为以下内容，**移除正向url**：
+历史本地 mock 与 SDK 独立子进程闭环已通过，包含同端口重载重绑定；不将其计作真实SnowLuma反向验收。首次私有预置配置仍使用下文安装流程，但完整envelope改为以下内容，**移除正向url**：
 
 ```toml
 config_version = 1
@@ -54,19 +72,19 @@ self_id = "10001"
 
 现有实例切换：先plugins stop并查询完成，读取当前revision，用config update提交完整values（transport/reverse_bind/reverse_path/self_id及可选秘密引用，不含url），查询完成后plugins start。不要在线编辑envelope或手工将revision置1；可用exclusive reload替换同模式版本，仍有事件缺口且不回滚业务数据。无native TLS或公网绑定，远程仅通过外部SSH隧道映射到loopback，部署方负责隧道认证。
 
-## 构建与首次启用
+## 正向连接：一步一步构建与首次启用
 
 以下为 Bash/Linux 流程，使用已有 Rust 工具链，从仓库构建到新目录。包内必须同时包含可执行文件、plugin.toml 和 config.schema.json；仅复制源码目录不能加载。Linux loopback CLI 已按私有预置配置→install/enable→desired/applied 1→connected，以及 SnowLuma 专用清单 echo 的 message/send_msg/response 闭环验收；该 mock 证据不证明真实 SnowLuma 兼容。
 
 ```sh
 REPO="$PWD"
-P4_DEMO="$(mktemp -d)"
-mkdir -p "$P4_DEMO/bin" "$P4_DEMO/source/adapter-snowluma" "$P4_DEMO/data/plugins/adapter-snowluma" "$P4_DEMO/packages"
-chmod 700 "$P4_DEMO/data" "$P4_DEMO/data/plugins" "$P4_DEMO/data/plugins/adapter-snowluma"
-cargo build --release --target-dir "$P4_DEMO/build" -p twintail-host -p adapter-snowluma
-cp "$P4_DEMO/build/release/twintail-host" "$P4_DEMO/bin/"
-cp "$P4_DEMO/build/release/adapter-snowluma" "$P4_DEMO/source/adapter-snowluma/"
-cp "$REPO/adapters/adapter-snowluma/plugin.toml" "$REPO/adapters/adapter-snowluma/config.schema.json" "$P4_DEMO/source/adapter-snowluma/"
+ADAPTER_DEMO="$(mktemp -d)"
+mkdir -p "$ADAPTER_DEMO/bin" "$ADAPTER_DEMO/source/adapter-snowluma" "$ADAPTER_DEMO/data/plugins/adapter-snowluma" "$ADAPTER_DEMO/packages"
+chmod 700 "$ADAPTER_DEMO/data" "$ADAPTER_DEMO/data/plugins" "$ADAPTER_DEMO/data/plugins/adapter-snowluma"
+cargo build --locked --release --target-dir "$ADAPTER_DEMO/build" -p twintail-host -p adapter-snowluma
+cp "$ADAPTER_DEMO/build/release/twintail-host" "$ADAPTER_DEMO/bin/"
+cp "$ADAPTER_DEMO/build/release/adapter-snowluma" "$ADAPTER_DEMO/source/adapter-snowluma/"
+cp "$REPO/adapters/adapter-snowluma/plugin.toml" "$REPO/adapters/adapter-snowluma/config.schema.json" "$ADAPTER_DEMO/source/adapter-snowluma/"
 ```
 
 当前 CLI 首次配置存在引导限制：enable 前校验必填配置，而 config 管理只接受启用计划中的插件。对于尚未运行、尚无配置文件的新数据根，先私有预置以下 `data/plugins/adapter-snowluma/config.toml`，再启动宿主。这里的地址和账号是本地示例，替换成被测部署实际值；没有鉴权时删除整个 `[values.access_token]` 表。正式 token 不直接写入该文件。
@@ -83,28 +101,53 @@ self_id = "10001"
 "$secret" = "SNOWLUMA_ACCESS_TOKEN"
 ```
 
-创建文件时使用 `umask 077`，使其权限为0600；不要原地覆盖运行实例配置。启动宿主前在私有终端环境设置 SNOWLUMA_ACCESS_TOKEN，宿主从自身环境解析引用。不要将真实值放进示例、命令历史或管理 JSON。保持宿主前台运行：
+把上面的 TOML 保存为 `$ADAPTER_DEMO/data/plugins/adapter-snowluma/config.toml`。在创建文件前运行 `umask 077`，创建后可用 `chmod 600 "$ADAPTER_DEMO/data/plugins/adapter-snowluma/config.toml"` 确保私有；仅用于尚未运行的新目录，不覆盖运行实例配置。
+
+若使用上面的 `SNOWLUMA_ACCESS_TOKEN` 引用，可在即将启动宿主的 **Bash** 终端输入以下命令，从隐藏输入读取实际 token，而不把真实值写进命令历史。没有鉴权时删除整个配置表，并跳过这一步：
 
 ```sh
-"$P4_DEMO/bin/twintail-host" --data-dir "$P4_DEMO/data" --install-dir "$P4_DEMO/packages"
+read -rs -p 'SnowLuma access token: ' SNOWLUMA_ACCESS_TOKEN
+printf '\n'
+export SNOWLUMA_ACCESS_TOKEN
 ```
 
-第二个终端使用同一个绝对 P4_DEMO 路径。依次 install，再查询操作终态；install 完成后 enable，再查询操作终态，最后查询连接状态。install 与 enable 各自返回 operation_id，替换下列占位符：
+宿主从自己的环境解析引用，不会从后来发管理命令的另一个终端读取变量。不要将真实值放进示例、日志或管理 JSON。然后保持宿主前台运行：
 
 ```sh
-"$P4_DEMO/bin/twintail-host" plugins install "$P4_DEMO/source/adapter-snowluma" --data-dir "$P4_DEMO/data"
-"$P4_DEMO/bin/twintail-host" operations get INSTALL_OPERATION_ID --data-dir "$P4_DEMO/data"
-"$P4_DEMO/bin/twintail-host" plugins enable adapter-snowluma 0.1.0 '["bots.register","events.publish","services.provide"]' --data-dir "$P4_DEMO/data"
-"$P4_DEMO/bin/twintail-host" operations get ENABLE_OPERATION_ID --data-dir "$P4_DEMO/data"
-"$P4_DEMO/bin/twintail-host" config get adapter-snowluma --data-dir "$P4_DEMO/data"
-"$P4_DEMO/bin/twintail-host" plugins call adapter-snowluma connection.status '{}' --data-dir "$P4_DEMO/data"
+printf 'Adapter demo directory: %s\n' "$ADAPTER_DEMO"
+"$ADAPTER_DEMO/bin/twintail-host" --data-dir "$ADAPTER_DEMO/data" --install-dir "$ADAPTER_DEMO/packages"
+```
+
+第二个终端使用同一个绝对 ADAPTER_DEMO 路径。依次 install，再查询操作终态；install 完成后 enable，再查询操作终态，最后查询连接状态。install 与 enable 各自返回 operation_id，替换下列占位符：
+
+```sh
+"$ADAPTER_DEMO/bin/twintail-host" plugins install "$ADAPTER_DEMO/source/adapter-snowluma" --data-dir "$ADAPTER_DEMO/data"
+"$ADAPTER_DEMO/bin/twintail-host" operations get INSTALL_OPERATION_ID --data-dir "$ADAPTER_DEMO/data"
+"$ADAPTER_DEMO/bin/twintail-host" plugins enable adapter-snowluma 0.1.0 '["bots.register","events.publish","services.provide"]' --data-dir "$ADAPTER_DEMO/data"
+"$ADAPTER_DEMO/bin/twintail-host" operations get ENABLE_OPERATION_ID --data-dir "$ADAPTER_DEMO/data"
+"$ADAPTER_DEMO/bin/twintail-host" config get adapter-snowluma --data-dir "$ADAPTER_DEMO/data"
+"$ADAPTER_DEMO/bin/twintail-host" plugins call adapter-snowluma connection.status '{}' --data-dir "$ADAPTER_DEMO/data"
 ```
 
 running 不是完成，必要时重复查询 operation；失败先按错误类别排查，不自动重提业务动作。连接断开不会令 IPC 插件自动退出，可能出现 enable 成功而 connected=false。运行后配置采用 stop→config update→start，每步等待完成，参阅[配置](configuration.md)。
 
-Windows 在新目录构建时复制 `twintail-host.exe` 和 `adapter-snowluma.exe`，安装前把来源清单 entrypoint 改为 `adapter-snowluma.exe`，再运行 install；清单和摘要生成后不能原地改入口。数据根使用当前用户私有 ACL，命令以 PowerShell `&` 调用并按当前版本规则传单个 JSON 参数。Windows P4 运行验证单独记录。
+### 查询结果与故障排查
 
-## SDK 集成与事件
+| 现象 | 先检查什么 |
+| --- | --- |
+| install/enable 返回操作 ID | 用 `operations get` 等到终态；接纳请求不等于已经完成 |
+| active 但 `connected=false` | 宿主和插件已运行，继续检查 OneBot 服务、实际地址/路径、登录状态和 token |
+| 正向连接拒绝或反复 backoff | 确认 SnowLuma 已监听、网络/转发通畅、`ws/wss` 和证书正确；不要关闭证书校验 |
+| 反向启动时报 InvalidConfig | 核对 loopback 绑定和端口占用；旧监听退出后才能绑定相同端口 |
+| 反向握手 401 / 403 | 401 检查 Bearer；403 检查精确路径、账号和 Universal 身份头 |
+| 配置更新提示冲突 | 重新读取 revision 后人工合并完整 values，不手动重置修订 |
+| 动作返回 `unknown_outcome` | 远端可能已执行，先核实结果，不自动重复发送 |
+
+需要实际收发时，另安装业务插件。echo 的默认清单依赖 mock，真实接入需使用下文的 SnowLuma 专用清单。
+
+Windows 在新目录构建时复制 `twintail-host.exe` 和 `adapter-snowluma.exe`，安装前把来源清单 entrypoint 改为 `adapter-snowluma.exe`，再运行 install；清单和摘要生成后不能原地改入口。数据根使用当前用户私有 ACL，命令以 PowerShell `&` 调用并按当前版本规则传单个 JSON 参数。Windows 真实接入专项运行验证单独记录。
+
+## 给适配器作者：SDK 集成与事件
 
 适配器申请并获授 `bots.register`、`events.publish`、`services.provide`，分别注册配置账号、发布来源事件和提供服务。清单声明不等于授权，宿主仍检查进程身份与 generation。后台连接任务须保留所有权，stop 取消并 join；stdout 只用于 SDK IPC，诊断走受控 stderr，不能输出秘密或原始完整敏感消息。tungstenite 0.28 的 TRACE 可能打印含 Bearer 的原始握手；当前包为 log 启用 max_level_info 与 release_max_level_info，编译时移除 TRACE/debug，另有捕获日志回归。该特性影响进程内所有使用 log 的依赖，当前 main 不安装 logger；不得为排障直接恢复依赖 TRACE。
 
@@ -126,7 +169,7 @@ OneBot 四类事件分别以 message、notice、request、meta_event 发布，�
 
 ## 配置、停止与验证
 
-配置沿用 P3 desired/applied 与 prepare/commit 契约。prepare 只验证，不建连接；需要重连的变更可以明确拒绝在线更新，由管理员 stop→离线 update→start 或受控 exclusive 替换。连接关闭须清理所有 pending，不将未完成动作带入新代。插件停止、重载后旧 BotRef 失效；默认先停用活动强依赖消费者，恢复新实例后重新取得 BotRef。
+配置沿用 desired/applied 与 prepare/commit 契约。prepare 只验证，不建连接；需要重连的变更可以明确拒绝在线更新，由管理员 stop→离线 update→start 或受控 exclusive 替换。连接关闭须清理所有 pending，不将未完成动作带入新代。插件停止、重载后旧 BotRef 失效；默认先停用活动强依赖消费者，恢复新实例后重新取得 BotRef。
 
 所有队列、帧、并发和等待均有界。队列上限、帧上限和退避范围应以配置 Schema 与实现硬上限双重校验，不能让任意配置恢复为无限资源。SDK 只管理自身回调任务，自建 WS reader/writer/reconnect 任务由适配器 stop 负责取消、关闭和 join。
 
@@ -142,7 +185,7 @@ cargo run --locked -p adapter-snowluma --example real_probe
 
 默认只查询 get_version_info/get_login_info，确认 self_id 匹配后计数四类事件60秒，不发送消息。需要 Bearer 时，TWINTAIL_ONEBOT_TOKEN_ENV 指定另一个持有 token 的环境变量名；不通过命令行或 URL 传 token。只有显式 `TWINTAIL_SEND_PROBE=1` 且设置 `TWINTAIL_ONEBOT_TARGET` 才发起一次固定文本的 send_private_msg，不重试，包括结果未知的情况。
 
-等待参数为 TWINTAIL_PROBE_CONNECT_TIMEOUT_SECS（默认10，1–60）、TWINTAIL_PROBE_EVENT_TIMEOUT_SECS（默认60，0–300）、TWINTAIL_PROBE_ACTION_TIMEOUT_MS（默认3000，10–30000）。探针仅输出版本白名单、身份匹配布尔值、status/retcode与计数，不打印账号、端点、token、payload或data；结束显式停止并等待传输任务。该工具不在自动测试中连接真实服务；lead 已执行取得部分真实证据，具体范围记录在兼容矩阵。
+等待参数为 TWINTAIL_PROBE_CONNECT_TIMEOUT_SECS（默认10，1–60）、TWINTAIL_PROBE_EVENT_TIMEOUT_SECS（默认60，0–300）、TWINTAIL_PROBE_ACTION_TIMEOUT_MS（默认3000，10–30000）。探针仅输出版本白名单、身份匹配布尔值、status/retcode与计数，不打印账号、端点、token、payload或data；结束显式停止并等待传输任务。该工具不在自动测试中连接真实服务；已有历史执行取得部分真实证据，具体范围记录在兼容矩阵。
 
 ## 手动宿主与业务插件闭环
 
@@ -162,4 +205,9 @@ cargo run --locked -p adapter-snowluma --example real_flow
 
 该工具需要明确的受控测试会话和一次回复授权，默认自动测试不访问真实服务。工具返回 ok/retcode0 只证明远端动作响应，收件端实际收到应另行确认；真实执行证据按兼容矩阵逐项填写，工具存在不等同闭环已验收。
 
-本次 real_flow 已实际通过：generation1 online→用户断开转发 offline→attempts2…6→generation2 online→matched=true、status=ok/retcode=0、exit=0；用户确认恢复转发后触发并收到一次回复。此结论限定本次 Linux x64 WSL mirrored 客户端与 SnowLuma 2.2.1-node 部署，未记录真实账号与消息 payload。Windows 原生握手诊断不等同 Windows 客户端运行验收。
+2026-10-29 的历史 real_flow 已实际通过：generation1 online→用户断开转发 offline→attempts2…6→generation2 online→matched=true、status=ok/retcode=0、exit=0；用户确认恢复转发后触发并收到一次回复。此结论限定本次 Linux x64 WSL mirrored 客户端与 SnowLuma 2.2.1-node 部署，未记录真实账号与消息 payload。Windows 原生握手诊断不等同 Windows 客户端运行验收。
+
+
+## 实现与真实验证的区别
+
+正向 Universal WS 有指定真实部署证据：Linux x64 WSL mirrored 客户端连接 SnowLuma 2.2.1-node，完成查询、账号匹配、一次私聊及断线重连后 Supervisor→独立适配器→业务插件的回复闭环，收件方确认收到。远端 OS/commit/SHA 未知。反向 Universal WS 有本地 mock/SDK 证据，**真实 SnowLuma 反向部署尚未验证**；split `/api`/`/event` 与 HTTP 传输未实现。群聊、notice/request、其他动作、Bearer/TLS 的真实部署验证仍按[兼容矩阵](../compatibility/snowluma.md)逐项记录，不由类型支持、CI 或一次私聊扩大结论。架构合同见 [ADR 0005](../architecture/0005-p4-onebot-snowluma.md)。
