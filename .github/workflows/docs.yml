@@ -61,8 +61,6 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - name: Deploy documentation
         id: deployment
         uses: actions/deploy-pages@v4

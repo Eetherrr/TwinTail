@@ -38,7 +38,7 @@ python -m mkdocs serve
 
 `check.py` 在临时目录执行严格构建，再检查生成 HTML 的本地链接、资源与锚点；不联网验证外链。仓库根文档、源码等站外链接在构建时映射到 GitHub main，对应已发布制品时应另行核对版本。
 
-GitHub Actions 的 Documentation / GitHub Pages 工作流对 PR 执行构建，对 main 的文档变更构建并部署。首次启用需在仓库 Settings → Pages 中将 Source 设为 **GitHub Actions**；工作流会尝试初始化，若仓库策略限制自动启用，需由管理员完成该设置后重新运行。预期项目站点地址是 <https://eetherrr.github.io/TwinTail/>，实际上线以成功部署和公开访问为准。
+GitHub Actions 的 Documentation / GitHub Pages 工作流对 PR 执行构建，对 main 的文档变更构建并部署。首次启用需在仓库 Settings → Pages 中将 Source 设为 **GitHub Actions**；默认工作流令牌不具备首次启用 Pages 的仓库管理权限，须由管理员完成该设置后运行工作流，不需要向构建环境提供个人令牌。预期项目站点地址是 <https://eetherrr.github.io/TwinTail/>，实际上线以成功部署和公开访问为准。
 
 网站无后端、账号或 Bot 管理能力；它与本机 WebUI 是两个独立入口。不要在文档里提交登录 token、个人账号或运行数据。
 
