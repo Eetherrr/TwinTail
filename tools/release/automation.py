@@ -140,6 +140,10 @@ def collect(repo, artifacts, output, tag, commit):
         notes = (
             f"# TwinTail {tag}\n\n"
             f"Source commit (caller-supplied SHA): `{commit}`\n\n"
+            f"变更与升级说明：[CHANGELOG](https://github.com/Eetherrr/TwinTail/blob/{commit}/CHANGELOG.md) · "
+            "[入门文档](https://eetherrr.github.io/TwinTail/plugin-api/quickstart/)\n\n"
+            "下载对应平台的归档，先用 SHA256SUMS 校验。升级前停止旧宿主及配置写入进程并备份数据；"
+            "不原地覆盖旧插件版本。此版本未扩大真实 SnowLuma 验证范围。\n\n"
             "## Target scope\n\n"
             + "".join(f"- `{target}` / `{release.TARGETS[target][0]}`\n" for target in release.TARGETS)
             + "\n## Candidate and validation scope\n\n"

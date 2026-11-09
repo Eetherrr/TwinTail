@@ -4,7 +4,7 @@
 # for admin_token in config.toml; a literal is rejected by browser configuration reads.
 id = "web-admin"
 name = "TwinTail loopback web administration"
-version = "0.1.0"
+version = "0.1.1"
 protocol_version = 1
 host_api = "^0.1.0"
 entrypoint = "web-admin"

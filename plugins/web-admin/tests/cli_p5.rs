@@ -331,7 +331,7 @@ async fn authenticated_http_management_and_independent_cli_rescue() {
         "plugins",
         "enable",
         "web-admin",
-        "0.1.0",
+        env!("CARGO_PKG_VERSION"),
         r#"["management.read","management.write"]"#,
     ])
     .await;
@@ -426,7 +426,7 @@ async fn authenticated_http_management_and_independent_cli_rescue() {
             browser
                 .operation(
                     "plugins.enable",
-                    json!({"id":id,"version":"0.1.0","grants":grants})
+                    json!({"id":id,"version":env!("CARGO_PKG_VERSION"),"grants":grants})
                 )
                 .await["state"],
             "completed"
@@ -457,7 +457,7 @@ async fn authenticated_http_management_and_independent_cli_rescue() {
         browser
             .operation(
                 "plugins.reload",
-                json!({"id":"echo-plugin","version":"0.1.0"})
+                json!({"id":"echo-plugin","version":env!("CARGO_PKG_VERSION")})
             )
             .await["state"],
         "completed"
@@ -563,7 +563,7 @@ async fn authenticated_http_management_and_independent_cli_rescue() {
         "plugins",
         "enable",
         "web-admin",
-        "0.1.0",
+        env!("CARGO_PKG_VERSION"),
         r#"["management.read"]"#,
     ])
     .await;
@@ -573,7 +573,7 @@ async fn authenticated_http_management_and_independent_cli_rescue() {
         browser
             .read(
                 "plugins.readme",
-                json!({"id":"echo-plugin","version":"0.1.0"})
+                json!({"id":"echo-plugin","version":env!("CARGO_PKG_VERSION")})
             )
             .await,
         json!({"filename":null,"content":null,"verified":false})

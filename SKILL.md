@@ -197,7 +197,7 @@ P1 已提供 [协议、清单、生命周期、权限、错误与排障指南](d
 | P5 WebUI（已完成 Linux 本地验收） | web-admin 插件、认证、插件与配置管理页、日志与连接诊断、OpenAPI、完整 CLI 救援路径 | 浏览器完成启停/重载/配置更新；并发更新冲突提示；CSRF/越权被拒绝；自身端口/配置重载失败可通过 CLI 恢复 |
 | P6 发布加固 | 反向 WS、依赖升级/配置迁移、平台打包、负载与故障测试、安全说明、用户与插件文档定版 | Linux x64/arm64 与 Windows x64 明确验证矩阵；持续运行与队列资源上限可复现；版本/文档/CHANGELOG 对齐，先交付可校验 0.1 MVP 本地候选；公开 GitHub 发行已获授权，采用 MIT |
 
-首次对外发布目标为 0.1 MVP；Cargo 当前版本为 0.1.0，v0.1.0 已公开发行；main 后续新增功能以 Unreleased 记录为准，不表示已经进入该 Release 附件，也不表示未测试平台已获认证。P6 后再评估 WASM、签名市场、持久化事件、HTTP 传输和多宿主部署。
+首次对外发布目标为 0.1 MVP；Cargo 当前版本为 0.1.1，v0.1.0 已公开发行；0.1.1 新增功能与升级要求见对应版本 CHANGELOG，后续改动以 Unreleased 记录为准，不表示已经进入该 Release 附件，也不表示未测试平台已获认证。P6 后再评估 WASM、签名市场、持久化事件、HTTP 传输和多宿主部署。
 
 项目实施入口：[README](README.md)、[架构索引](docs/architecture/README.md)、[安全边界](docs/architecture/security.md)、[兼容性记录](docs/compatibility/README.md)。实际 workspace 已有 `twintail-protocol`、`twintail-core`、`twintail-host`、`twintail-plugin-sdk`、`twintail-onebot11`、`adapters/adapter-snowluma` 及两个示例；源码路径为 `crates/twintail-*`。当前已有 list/status/start/stop/call、P3 包管理/配置事务/热重载及 P4 独立适配器；P5 已添加 `plugins/web-admin`、`web/` 和管理桥接，见 [ADR 0006](docs/architecture/0006-p5-web-admin.md)。缺失 host.toml 表示空计划。
 

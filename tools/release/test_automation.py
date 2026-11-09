@@ -112,7 +112,7 @@ class AutomationTests(unittest.TestCase):
             self.assertEqual((self.output / f"{target}-validation.json").read_bytes(), (self.artifacts / target / "validation.json").read_bytes())
             self.assertEqual((self.output / automation.archive_name("0.1.0", target)).read_bytes(), (self.artifacts / target / automation.archive_name("0.1.0", target)).read_bytes())
         notes = (self.output / "release-notes.md").read_text(encoding="utf-8")
-        for text in (self.commit, "caller-supplied", "candidate", "runtime_verified=false", "do not certify", *release.TARGETS):
+        for text in (self.commit, f"/blob/{self.commit}/CHANGELOG.md", "升级前停止旧宿主", "caller-supplied", "candidate", "runtime_verified=false", "do not certify", *release.TARGETS):
             self.assertIn(text, notes)
 
     def test_missing_platform_rejected(self):

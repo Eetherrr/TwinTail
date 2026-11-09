@@ -169,7 +169,7 @@ async fn documented_private_config_install_enable_status_and_echo_via_actual_cli
         "plugins",
         "enable",
         "adapter-snowluma",
-        "0.1.0",
+        env!("CARGO_PKG_VERSION"),
         r#"["bots.register","events.publish","services.provide"]"#,
     ])
     .await;
@@ -195,7 +195,7 @@ async fn documented_private_config_install_enable_status_and_echo_via_actual_cli
         "plugins",
         "enable",
         "echo-plugin",
-        "0.1.0",
+        env!("CARGO_PKG_VERSION"),
         r#"["events.subscribe","actions.call"]"#,
     ])
     .await;

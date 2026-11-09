@@ -66,7 +66,7 @@ printf 'Web demo directory: %s\n' "$WEB_DEMO"
 ```sh
 "$WEB_DEMO/bin/twintail-host" plugins install "$WEB_DEMO/source/web-admin" --data-dir "$WEB_DEMO/data"
 "$WEB_DEMO/bin/twintail-host" operations list --data-dir "$WEB_DEMO/data"
-"$WEB_DEMO/bin/twintail-host" plugins enable web-admin 0.1.0 '["management.read","management.write"]' --data-dir "$WEB_DEMO/data"
+"$WEB_DEMO/bin/twintail-host" plugins enable web-admin 0.1.1 '["management.read","management.write"]' --data-dir "$WEB_DEMO/data"
 "$WEB_DEMO/bin/twintail-host" operations list --data-dir "$WEB_DEMO/data"
 "$WEB_DEMO/bin/twintail-host" plugins status web-admin --data-dir "$WEB_DEMO/data"
 "$WEB_DEMO/bin/twintail-host" config get web-admin --data-dir "$WEB_DEMO/data"

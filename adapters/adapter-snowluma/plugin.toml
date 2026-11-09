@@ -2,7 +2,7 @@
 # Host grants must explicitly include each required capability below.
 id = "adapter-snowluma"
 name = "SnowLuma OneBot v11 Universal WebSocket"
-version = "0.1.0"
+version = "0.1.1"
 protocol_version = 1
 host_api = "^0.1.0"
 entrypoint = "adapter-snowluma"

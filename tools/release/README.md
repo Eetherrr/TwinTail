@@ -1,8 +1,10 @@
 # 本地候选打包工具
 
-GitHub tag 触发的三平台构建与草稿流程见[自动化 Release](../../docs/release/automation.md)。本文件说明底层打包工具；工具本身仍不执行网络发布。`automation.py` 为工作流提供版本验证及三平台汇总，`collect --help` 可查看接口。
+GitHub tag 触发的三平台构建与草稿流程见[自动化 Release](../../docs/release/automation.md)。默认轻量 tag 与普通附注 tag 仍只创建草稿；操作者可在新附注 tag 的最顶层消息加入精确独立行 `TwinTail-Publish: approved`，显式选择在全部验证成功后公开并设为 latest。工作流先创建草稿，确认目标为受测提交，核对精确八个附件，再下载并与 `release-output` 逐字节比较、校验 SHA256；任何前置检查失败保留草稿，不覆盖现有 Release 或附件。嵌套内层 tag 消息和手动构建不构成批准。创建 tag 的示例与完整限制见上述指南。
 
-Python 3.11+，仅使用标准库。当前 workspace 0.1.0 为工程版本，产物始终是 `channel: candidate`、`public_release: false`、`license_gate: MIT`、`license: MIT`。项目已由权利人授权采用 MIT，候选必须携带 `LICENSE`、`THIRD_PARTY_NOTICES.md` 和第三方许可正文；第三方依赖继续按其各自许可使用。工具不上传、不打 tag、不执行 cargo publish，远端发行由独立授权流程执行。参见[发行指南](../../docs/release/README.md)。
+本文件说明底层打包工具；工具本身仍不执行网络发布。`automation.py` 为工作流提供版本验证及三平台汇总，`collect --help` 可查看接口。汇总精确输出三个归档、三个 `TARGET-validation.json`、`SHA256SUMS`、`release-notes.md`；外部摘要覆盖其余七个文件，包含发行说明。
+
+Python 3.11+，仅使用标准库。workspace 工程版本以 `Cargo.toml` 为准（以下路径以 0.1.0 示意），产物始终是 `channel: candidate`、`public_release: false`、`license_gate: MIT`、`license: MIT`。项目已由权利人授权采用 MIT，候选必须携带 `LICENSE`、`THIRD_PARTY_NOTICES.md` 和第三方许可正文；第三方依赖继续按其各自许可使用。工具不上传、不打 tag、不执行 cargo publish，远端发行由独立授权流程执行。参见[发行指南](../../docs/release/README.md)。
 
 从仓库根目录运行；所有输出必须是受信任用户独占的私有目录中的新路径。不要让其他用户并发写入输入、输出及其父目录。预存输出、符号链接和 Windows reparse point/junction会拒绝；标准库检查和 rename 不能防止同用户恶意并发替换路径。构建不检查整个 Cargo 缓存目录树，stage 只读取指定的五个最终二进制。
 

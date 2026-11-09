@@ -132,6 +132,6 @@ SDK 保持读循环与 handler 分离，handler 可以 await Context 调用；st
 
 ### 版本与验证范围（需要时再查）
 
-SDK、protocol、core、host 与示例的 Cargo 包版本为 `0.1.0`；wire 为 `1.2`。清单 `protocol_version = 1` 是 wire 主版本，`host_api = "^0.1.0"` 是宿主 API 兼容范围。SDK 接受 wire 1.1 或兼容的更高 minor，低于 1.1 拒绝初始化；配置和应用启动确认扩展需双方支持 1.2。能力也参与握手校验，major 相同不代表旧宿主支持所需路由。SDK 使用 JSON IPC，不依赖跨进程 Rust ABI。
+SDK、protocol、core、host 与示例的 Cargo 包版本为 `0.1.1`；wire 为 `1.2`。清单 `protocol_version = 1` 是 wire 主版本，`host_api = "^0.1.0"` 是宿主 API 兼容范围。SDK 接受 wire 1.1 或兼容的更高 minor，低于 1.1 拒绝初始化；配置和应用启动确认扩展需双方支持 1.2。能力也参与握手校验，major 相同不代表旧宿主支持所需路由。SDK 使用 JSON IPC，不依赖跨进程 Rust ABI。
 
 2026-10-29 Linux 本地已用本页包结构完成独立 release 构建、两包离线校验、CLI 注入/查询及顺序停止：`delivered=1/dropped=0`，动作记录含相同消息段，宿主正常退出。这是该演示的历史专项记录，非本次重新运行结论；最新原生 CI 见[平台矩阵](../release/platforms.md)，完整历史见[兼容性记录](../compatibility/README.md)。Linux 风格命令不代表 macOS 或每种 PowerShell 环境均已专项验证。

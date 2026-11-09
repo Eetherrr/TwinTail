@@ -140,7 +140,7 @@ jobs:
           retention-days: 14
 
   publish:
-    name: Create draft (tag only)
+    name: Create draft and publish if explicitly approved (tag only)
     needs: [version, draft]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -154,7 +154,8 @@ jobs:
         with:
           name: release-review-bundle
           path: release-output
-      - name: Create new GitHub Release draft
+      - name: Inspect remote tag and explicit publication approval
+        id: approval
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -171,13 +172,25 @@ jobs:
               with urllib.request.urlopen(request, timeout=30) as response:
                   return json.load(response)
           obj = get('/git/ref/tags/' + quote(os.environ['RELEASE_TAG'], safe=''))['object']
-          for _ in range(16):
+          approved = False
+          for depth in range(16):
               if obj['type'] != 'tag':
                   break
-              obj = get('/git/tags/' + obj['sha'])['object']
+              tag = get('/git/tags/' + obj['sha'])
+              if depth == 0:
+                  approved = 'TwinTail-Publish: approved' in tag['message'].split('\n')
+              obj = tag['object']
           if obj['type'] != 'commit' or obj['sha'] != os.environ['SOURCE_COMMIT']:
               raise SystemExit('Remote tag no longer matches the tested source commit; publication stopped.')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('publish=' + str(approved).lower() + '\n')
           PY
+      - name: Create new GitHub Release draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
           # Preserve existing releases and assets: reruns never overwrite v0.1.0 or another publication.
           python - <<'PY'
           import json, os, urllib.request, urllib.error
@@ -194,3 +207,75 @@ jobs:
               raise SystemExit('Release already exists; inspect it manually. No assets were overwritten.')
           PY
           gh release create "$RELEASE_TAG" release-output/* --verify-tag --target "$SOURCE_COMMIT" --draft --title "TwinTail $RELEASE_TAG" --notes-file release-output/release-notes.md
+      - name: Verify uploaded draft bytes and publish approved tag
+        if: steps.approval.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          # Every check precedes the only public mutation; failures leave the new release draft.
+          python - <<'PY'
+          import filecmp, json, os, pathlib, subprocess, tempfile, urllib.request
+          from urllib.parse import quote
+          tag_name = os.environ['RELEASE_TAG']
+          source = os.environ['SOURCE_COMMIT']
+          base = os.environ['GITHUB_API_URL'] + '/repos/' + os.environ['GITHUB_REPOSITORY']
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'}
+          def get(path):
+              request = urllib.request.Request(base + path, headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+          def require(condition, message):
+              if not condition:
+                  raise SystemExit(message)
+          version = tag_name.removeprefix('v')
+          targets = ('linux-x86_64', 'linux-aarch64', 'windows-x86_64')
+          expected = {'SHA256SUMS', 'release-notes.md'}
+          expected.update(target + '-validation.json' for target in targets)
+          expected.update('twintail-' + version + '-' + target + ('.zip' if target.startswith('windows-') else '.tar.gz') for target in targets)
+          local = pathlib.Path('release-output').resolve()
+          def files(directory):
+              entries = list(directory.iterdir())
+              require(all(path.is_file() and not path.is_symlink() for path in entries), 'Unexpected non-regular release asset.')
+              return {path.name for path in entries}
+          require(files(local) == expected, 'Review bundle does not contain exactly the eight expected assets.')
+          release_path = '/releases/tags/' + quote(tag_name, safe='')
+          def verify_draft():
+              release = get(release_path)
+              require(release['draft'] is True and release['tag_name'] == tag_name and release['target_commitish'] == source, 'Draft tag or target differs from tested source.')
+              assets = release['assets']
+              require(len(assets) == len(expected) and {asset['name'] for asset in assets} == expected, 'Draft asset set differs from review bundle.')
+              require(all(asset['state'] == 'uploaded' and asset['size'] == (local / asset['name']).stat().st_size for asset in assets), 'Draft asset upload incomplete or size mismatch.')
+              return release['id']
+          release_id = verify_draft()
+          with tempfile.TemporaryDirectory(prefix='twintail-release-') as temporary:
+              downloaded = pathlib.Path(temporary)
+              subprocess.run(['gh', 'release', 'download', tag_name, '--dir', temporary], check=True)
+              require(files(downloaded) == expected, 'Downloaded asset set differs from review bundle.')
+              for name in expected:
+                  require(filecmp.cmp(local / name, downloaded / name, shallow=False), 'Uploaded asset bytes differ: ' + name)
+              # Require precisely seven checksum entries before allowing sha256sum to open paths.
+              for directory in (local, downloaded):
+                  lines = (directory / 'SHA256SUMS').read_text(encoding='ascii').splitlines()
+                  checksummed = set()
+                  for line in lines:
+                      digest, separator, name = line[:64], line[64:66], line[66:]
+                      require(len(digest) == 64 and all(c in '0123456789abcdef' for c in digest) and separator == '  ' and name in expected - {'SHA256SUMS'} and name not in checksummed, 'Invalid or unexpected checksum entry.')
+                      checksummed.add(name)
+                  require(checksummed == expected - {'SHA256SUMS'}, 'Checksum inventory differs from expected assets.')
+                  subprocess.run(['sha256sum', '--strict', '--check', 'SHA256SUMS'], cwd=directory, check=True)
+          # Recheck remote approval/commit and release identity after downloading; protect tags in repository settings.
+          obj = get('/git/ref/tags/' + quote(tag_name, safe=''))['object']
+          require(obj['type'] == 'tag', 'Public publication requires a top-level annotated tag.')
+          for depth in range(16):
+              if obj['type'] != 'tag':
+                  break
+              annotation = get('/git/tags/' + obj['sha'])
+              if depth == 0:
+                  require('TwinTail-Publish: approved' in annotation['message'].split('\n'), 'Top-level publication approval is no longer present.')
+              obj = annotation['object']
+          require(obj['type'] == 'commit' and obj['sha'] == source, 'Remote tag no longer matches the tested source commit.')
+          require(verify_draft() == release_id, 'Draft release identity changed during verification.')
+          subprocess.run(['gh', 'release', 'edit', tag_name, '--draft=false', '--latest'], check=True)
+          PY

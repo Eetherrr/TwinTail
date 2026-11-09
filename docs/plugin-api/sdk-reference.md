@@ -13,7 +13,7 @@
 - [配置事务实现](../../crates/twintail-plugin-sdk/src/configuration.rs)。
 - [握手和错误类型](../../crates/twintail-protocol/src/lib.rs)、[路由载荷](../../crates/twintail-protocol/src/routing.rs)、[配置载荷](../../crates/twintail-protocol/src/configuration.rs)、[管理载荷](../../crates/twintail-protocol/src/management.rs)。
 
-SDK 的 Cargo 包版本为 `0.1.0`，通过本地源码路径依赖使用；当前 wire 为 `1.2`，SDK 接受协商 `1.1` 或兼容的更新 minor。包版本、线协议版本与配置格式版本是不同维度。`0.1.0` 不表示 Rust API 已有稳定兼容承诺；新项目应使用与宿主相同版本的源码。
+SDK 的 Cargo 包版本为 `0.1.1`，通过本地源码路径依赖使用；当前 wire 为 `1.2`，SDK 接受协商 `1.1` 或兼容的更新 minor。包版本、线协议版本与配置格式版本是不同维度。`0.1.1` 不表示 Rust API 已有稳定兼容承诺；新项目应使用与宿主相同版本的源码。
 
 SDK 公开的全部自有 API 是：`Result`、`RuntimeOptions`、`Plugin`、`Context`、`PluginReader`、`PluginWriter`、`run_stdio`、`run_io`。另外重导出下文列出的协议载荷与错误类型；没有公开“任意方法名”的原始宿主客户端。
 

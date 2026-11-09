@@ -2,7 +2,7 @@
 # Host grants must explicitly allow every required capability below.
 id = "mock-adapter"
 name = "mock-adapter"
-version = "0.1.0"
+version = "0.1.1"
 protocol_version = 1
 host_api = "^0.1.0"
 entrypoint = "mock-adapter"

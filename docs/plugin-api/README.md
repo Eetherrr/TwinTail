@@ -55,6 +55,6 @@ cargo run -p twintail-core --example export_manifest_schema -- --check
 
 SDK 封装握手、生命周期、有界通信、事件订阅、动作与版本化服务，支持配置事务、本地包管理和排他热重载。OneBot 类型与 SnowLuma 正向 Universal WS 已有指定真实部署验证；loopback 反向 Universal WS 有本地 mock 与子进程验证，真实 SnowLuma 反向部署尚未验证，split/HTTP 延期。Web 管理已有 Linux 本地验收；Windows 原生 CI 通过不等于 Windows live 浏览器专项通过。
 
-SDK 的 Cargo `0.1.0` 不表示稳定 API 承诺，也不表示 main 的每一项改进已进入 v0.1.0 附件。独立进程不是操作系统沙箱，仅运行受信任插件；SDK 与宿主不会自动重试副作用动作，不承诺事件持久重放或零停机重载。
+SDK 的 Cargo `0.1.1` 不表示稳定 API 承诺，也不表示 main 的每一项改进已进入 v0.1.0 附件。独立进程不是操作系统沙箱，仅运行受信任插件；SDK 与宿主不会自动重试副作用动作，不承诺事件持久重放或零停机重载。
 
 历史与证据放在这里查阅，而非作为学习 API 的先决条件：[总体设计](../../SKILL.md) · [架构决策](../architecture/README.md) · [平台矩阵](../release/platforms.md) · [真实 SnowLuma 兼容矩阵](../compatibility/snowluma.md) · [安全边界](../architecture/security.md)。指南中的示例不自动构成所有平台和外部服务均已验证的声明。

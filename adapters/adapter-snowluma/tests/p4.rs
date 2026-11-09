@@ -35,8 +35,9 @@ fn spec(adapter: bool) -> PluginSpec {
         )
     };
     let executable = Path::new(binary).canonicalize().unwrap();
+    let version = env!("CARGO_PKG_VERSION");
     let mut manifest: Manifest = toml::from_str(&format!(
-        "id='{id}'\nname='{id}'\nversion='0.1.0'\nprotocol_version=1\nhost_api='^0.1'\nentrypoint='fixture'\nreload_policy='exclusive'\n"
+        "id='{id}'\nname='{id}'\nversion='{version}'\nprotocol_version=1\nhost_api='^0.1'\nentrypoint='fixture'\nreload_policy='exclusive'\n"
     )).unwrap();
     manifest.capabilities = grants.iter().map(|v| (*v).to_owned()).collect();
     manifest.required_capabilities = manifest.capabilities.clone();

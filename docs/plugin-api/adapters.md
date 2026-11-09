@@ -123,7 +123,7 @@ printf 'Adapter demo directory: %s\n' "$ADAPTER_DEMO"
 ```sh
 "$ADAPTER_DEMO/bin/twintail-host" plugins install "$ADAPTER_DEMO/source/adapter-snowluma" --data-dir "$ADAPTER_DEMO/data"
 "$ADAPTER_DEMO/bin/twintail-host" operations get INSTALL_OPERATION_ID --data-dir "$ADAPTER_DEMO/data"
-"$ADAPTER_DEMO/bin/twintail-host" plugins enable adapter-snowluma 0.1.0 '["bots.register","events.publish","services.provide"]' --data-dir "$ADAPTER_DEMO/data"
+"$ADAPTER_DEMO/bin/twintail-host" plugins enable adapter-snowluma 0.1.1 '["bots.register","events.publish","services.provide"]' --data-dir "$ADAPTER_DEMO/data"
 "$ADAPTER_DEMO/bin/twintail-host" operations get ENABLE_OPERATION_ID --data-dir "$ADAPTER_DEMO/data"
 "$ADAPTER_DEMO/bin/twintail-host" config get adapter-snowluma --data-dir "$ADAPTER_DEMO/data"
 "$ADAPTER_DEMO/bin/twintail-host" plugins call adapter-snowluma connection.status '{}' --data-dir "$ADAPTER_DEMO/data"
