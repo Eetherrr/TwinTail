@@ -28,6 +28,6 @@
 
 ## P6候选与离线状态迁移
 
-候选构建与公开发行是不同操作；当前 v0.1.0 已公开发行，具体附件与范围见[发行入口](../release/README.md)。升级前在维护窗口停止写入并备份独立数据根与包版本；恢复业务数据与恢复旧包是分别决策，热重载不撤销迁移或外部动作。tools/state已提供Unix离线snapshot/verify/restore，保留原字节，不转换Schema；恢复仅写新/空私有根，具体命令、端点占位与资源限制见[冷备恢复](../release/operations.md)。verify不证明环境引用可用或插件Schema通过，不把文件复制称作在线一致快照。候选发布约束见[发行入口](../release/README.md)。
+候选构建与公开发行是不同操作；当前 v0.1.1 已公开发行，具体附件与范围见[发行入口](../release/README.md)。升级前在维护窗口停止写入并备份独立数据根与包版本；恢复业务数据与恢复旧包是分别决策，热重载不撤销迁移或外部动作。tools/state已提供Unix离线snapshot/verify/restore，保留原字节，不转换Schema；恢复仅写新/空私有根，具体命令、端点占位与资源限制见[冷备恢复](../release/operations.md)。verify不证明环境引用可用或插件Schema通过，不把文件复制称作在线一致快照。候选发布约束见[发行入口](../release/README.md)。
 
 适配器config_version保持1：新增transport枚举forward_ws（默认）/reverse_ws，旧url配置仍按forward_ws解释。reverse_ws时url省略或为空，reverse_bind默认127.0.0.1:17281且仅数字loopback，reverse_path默认/onebot/v11；其他配置限额继续适用。切换传输属于startup-only配置变化，使用stop→完整values CAS更新→start，不让旧正向连接与新监听同时工作。反向握手与监听规则见[安全边界](../architecture/security.md)。反向 mock/SDK 子进程闭环与重载重绑定的本地证据不扩大[真实 SnowLuma 验证范围](../compatibility/snowluma.md)。

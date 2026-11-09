@@ -30,7 +30,7 @@ TwinTail 把“管理插件”“连接 QQ”“处理消息”分开，目的�
 - 已有 SnowLuma 正向 Universal WebSocket；也已实现仅本机回环地址监听的反向 Universal WebSocket。**反向实现的本地模拟测试不等于真实 SnowLuma 反向接入已经验收。** split API/Event 和 HTTP 传输仍未实现。
 - 已有独立 Web 管理插件，默认仅本机访问；没有任意网卡远程管理、内建 TLS、原始插件日志查看或多用户角色系统。
 - Linux x64/arm64、Windows x64 MSVC 和 WebUI 已有原生 CI 通过记录，具体执行范围见[平台矩阵](../release/platforms.md)。这不代表全部平台上的真实 QQ 行为、跨用户隔离或长期运行都已实测。
-- `v0.1.0` 已公开发行，附件仅 Linux x86_64；当前 `main` 继续变化。不要把当前文档里的新增能力当成旧附件已有，也不要把新增 Release 自动化尚未远端实跑的流程记成已通过。
+- `v0.1.1` 已公开 Linux x86_64、Linux aarch64 与 Windows x86_64 MSVC 附件，`main` 继续变化。版本源码与平台证据见[发行记录](../release/platforms.md)，旧版 v0.1.0 附件不包含之后新增功能。
 
 ## 按你遇到的问题阅读
 

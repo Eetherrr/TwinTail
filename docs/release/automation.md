@@ -2,7 +2,7 @@
 
 本页给项目维护者说明如何让 GitHub 自动构建下载包，再由人决定是否公开。普通用户下载现有版本请看[发行入口](README.md)。
 
-**v0.1.1 首次发行运行已完成完整 CI、三平台打包、汇总及草稿创建。** [运行 42577373476](https://github.com/Eetherrr/TwinTail/actions/runs/42577373476) 对应源码 `cf62e4381600a383d70fbba44b11811e75d5558f`；最终回下载核验公开步骤失败，保留草稿。维护者应在绑定原始运行、源提交、tag 与全部附件后恢复，不移动已有 tag，不覆盖资产；公开状态以 Release 页面为准。旧源码回归证据见[平台矩阵](platforms.md)。
+**v0.1.1 已公开，提供三个平台的下载包。** [首次运行 42577373476](https://github.com/Eetherrr/TwinTail/actions/runs/42577373476) 对应源码 `cf62e4381600a383d70fbba44b11811e75d5558f`，完整 CI、三平台打包、汇总和草稿创建成功；公开前按 tag 读取草稿失败。[恢复运行 42580369848](https://github.com/Eetherrr/TwinTail/actions/runs/42580369848) 下载原始 review bundle 并逐字节核对八个既有附件后公开，版本 tag 和原附件未变。恢复运行末尾的元数据比较仍报失败，不能把该运行记为整体成功；随后独立匿名下载确认 [Release](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.1) 为 public/latest，八个服务端摘要、七项 SHA256SUMS 及三个归档结构均一致。公开流程现允许 GitHub 将草稿下载 URL 转换为正式 tag URL，仍严格检查附件身份和内容。平台证据见[平台矩阵](platforms.md)。
 
 ## 先认识三个词
 

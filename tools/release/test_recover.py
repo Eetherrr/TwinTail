@@ -47,7 +47,8 @@ class FakeAPI:
                        "html_url": "https://github.com/Eetherrr/TwinTail/releases/tag/untagged-test",
                        "tarball_url": None, "zipball_url": None,
                        "assets": [{"id": index, "name": name, "state": "uploaded", "size": len(data),
-                                   "digest": "sha256:" + release.sha(data), "download_count": 0}
+                                   "digest": "sha256:" + release.sha(data), "download_count": 0,
+                                   "browser_download_url": "https://github.com/Eetherrr/TwinTail/releases/download/untagged-test/" + name}
                                   for index, (name, data) in enumerate(sorted(bundle.items()), 201)]}
         self.logs = b'Traceback (most recent call last):\n  in verify_draft\nurllib.error.HTTPError: HTTP Error 404: Not Found\n'
         self.on_last_download = None
@@ -106,6 +107,8 @@ class FakeAPI:
                            html_url="https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.1",
                            tarball_url="https://api.github.com/repos/Eetherrr/TwinTail/tarball/v0.1.1",
                            zipball_url="https://api.github.com/repos/Eetherrr/TwinTail/zipball/v0.1.1")
+        for asset in self.record["assets"]:
+            asset["browser_download_url"] = "https://github.com/Eetherrr/TwinTail/releases/download/v0.1.1/" + asset["name"]
         return copy.deepcopy(self.record)
 
 
@@ -165,6 +168,17 @@ class RecoveryTests(unittest.TestCase):
         self.assertIn("HTTP Error 404: Not Found", self.output.getvalue())
         tag_lookup = self.api.calls.index(("GET", "/releases/tags/" + recover.TAG))
         self.assertGreater(tag_lookup, self.api.calls.index(("PATCH", "/releases/101")))
+
+    def test_publication_does_not_allow_asset_identity_change(self):
+        original = self.api.patch
+        def changed_asset(path, payload):
+            result = original(path, payload)
+            self.api.record["assets"][0]["id"] += 1000
+            return result
+        self.api.patch = changed_asset
+        with self.assertRaisesRegex(recover.RecoveryError, "identity fields changed"):
+            self.recover()
+        self.assertEqual(len(self.api.mutations), 1)
 
     def test_public_release_no_changes(self):
         self.api.record.update(draft=False, published_at="already")

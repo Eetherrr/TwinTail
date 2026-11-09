@@ -77,7 +77,7 @@ data/                         # 配置和运行数据，不放在程序目录里
 项目仍在早期，接口可能继续调整。**文档网站跟随 main 分支，不一定与旧版下载附件完全相同。**
 
 - 当前工程版本是 `0.1.1`，包含插件说明阅读、彻底移除及新版入门与 SDK 文档，见[变更记录](CHANGELOG.md)。
-- 已公开的 v0.1.0 目前提供 Linux x86_64 附件。新 Release 流程会在三个平台构建并生成草稿，是否有对应附件请以[下载页](https://github.com/Eetherrr/TwinTail/releases)为准。
+- [v0.1.1](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.1) 已公开 Linux x86_64、Linux aarch64 和 Windows x86_64 MSVC 附件，附带 SHA256SUMS 和分平台验证报告。
 - Linux x86_64、Linux arm64 和 Windows x86_64 MSVC 已有自动测试记录，具体见[平台说明](docs/release/platforms.md)。自动测试不等于每个平台都完成了真实 QQ 部署。
 - 已在一套指定的 SnowLuma 部署上验证正向连接、私聊发送和断线重连。反向连接目前主要由模拟测试覆盖，其他传输方式尚未提供；详见[SnowLuma 兼容记录](docs/compatibility/snowluma.md)。
 

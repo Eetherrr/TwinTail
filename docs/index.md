@@ -71,9 +71,9 @@ SnowLuma 自己的管理网页负责 QQ 登录等账号运维；TwinTail WebUI �
 
 ## 该下载成品还是从源码构建？
 
-- **想直接使用现成程序**：先看 [GitHub Releases](https://github.com/Eetherrr/TwinTail/releases)，按[部署说明](release/operations.md)核对系统、CPU 架构与摘要。v0.1.0 已发布的附件只有 Linux x86_64。
+- **想直接使用现成程序**：先看 [GitHub Releases](https://github.com/Eetherrr/TwinTail/releases)，按[部署说明](release/operations.md)核对系统、CPU 架构与摘要。v0.1.1 已提供 Linux x86_64、Linux aarch64 与 Windows x86_64 MSVC 附件。
 - **想跟随最新 main、修改程序或运行 Cargo 示例**：取得完整源码，按[快速开始](plugin-api/quickstart.md)安装固定工具链再构建。预编译包不含完整源码，解包后直接运行 Cargo 示例不会具备所需工程。
-- **想发布新版本**：阅读[发行入口](release/README.md)和[自动化发行](release/automation.md)。新自动化尚未取得完整发行运行通过的记录；手动入口仅构建，tag 流程只创建草稿，公开发布仍由人工完成。
+- **想发布新版本**：阅读[发行入口](release/README.md)和[自动化发行](release/automation.md)。v0.1.1 已完成三平台构建并公开；手动入口仅构建，普通 tag 创建草稿，明确批准的附注 tag 可在核验后公开。
 
 ## 怎么知道真的成功了？
 

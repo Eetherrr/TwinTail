@@ -1,10 +1,10 @@
 # 下载、部署与发行
 
-想把 TwinTail 跑起来，先选适合自己的程序来源；想给别人提供新版本，再看构建和发行说明。TwinTail 使用 MIT 许可证，源码位于公开仓库 main 分支，[v0.1.0 Release](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.0) 已发布 **Linux x86_64** 附件。main 的新功能不自动进入旧附件，使用时请核对版本。
+想把 TwinTail 跑起来，先选适合自己的程序来源；想给别人提供新版本，再看构建和发行说明。TwinTail 使用 MIT 许可证，源码位于公开仓库 main 分支，[v0.1.1 Release](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.1) 已发布 **Linux x86_64、Linux aarch64 和 Windows x86_64 MSVC** 附件。main 的新功能不自动进入旧附件，使用时请核对版本。
 
 ## 我只是想用，应该从哪里开始？
 
-1. **下载现成程序**：到 Release 页面选择与你的系统和 CPU 架构相符的附件；只有源代码归档而没有对应二进制时，不要把其他平台的包当作可直接运行的程序。v0.1.0 已公开的二进制仅 Linux x86_64。
+1. **下载现成程序**：到 Release 页面选择与你的系统和 CPU 架构相符的附件；只有源代码归档而没有对应二进制时，不要把其他平台的包当作可直接运行的程序。v0.1.1 提供上述三个平台的预编译包。
 2. **核对下载**：比较页面提供的 SHA256 与下载文件，再按[运维指南](operations.md)解包、设置独立数据根。SHA256 是文件“指纹”，用于检查下载损坏或内容变化，不是发行者签名。
 3. **先跑一个示例**：[快速开始](../plugin-api/quickstart.md)从源码运行不需要 QQ 的 mock/echo 示例。
 4. **接入真正机器人**：自行部署和登录 SnowLuma，再按[适配器指南](../plugin-api/adapters.md)连接它的 OneBot 服务。需要网页管理时另装 [web-admin](../plugin-api/web-admin.md)。
@@ -37,6 +37,6 @@
 
 发行工具入口是 `python3 tools/release/release.py --help`，构建、整理文件、压缩和校验步骤见[构建与交付](plugins.md)。工具报告固定保留 `channel=candidate`、`public_release=false`、`runtime_verified=false`：这些字段描述打包工具自身的证据，不会因为另外公开了 Release 就自动改写为业务验证通过。
 
-Release 自动化的 v0.1.1 首次运行已通过完整 CI、三平台原生打包、汇总和草稿创建；首次公开验证失败后保留草稿，恢复详情见[自动化发行](automation.md)。手动入口仅构建并上传 review artifacts；普通 tag 创建草稿，明确批准的附注 tag 才会在全部核验成功后公开。它不自动发布 Cargo registry，也不修改现有 v0.1.0。
+Release 自动化的 v0.1.1 首次运行已通过完整 CI、三平台原生打包、汇总和草稿创建；现已完成恢复并公开，八个附件经匿名下载复核，详情见[自动化发行](automation.md)。手动入口仅构建并上传 review artifacts；普通 tag 创建草稿，明确批准的附注 tag 才会在全部核验成功后公开。它不自动发布 Cargo registry，也不修改现有 v0.1.0。
 
 再分发制品应包含项目 MIT 许可与需要的第三方声明，并重新执行 stage/verify。Linux/Windows 原生 CI、浏览器测试和真实 QQ 连接分别记录，任何一项都不扩大其他项的结论；反向真实 SnowLuma 尚未验证。

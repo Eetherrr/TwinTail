@@ -1,6 +1,6 @@
 # 哪些平台实际测过？
 
-下载前先核对操作系统和 CPU 架构，再看下面证据。**源码能通过测试、目标程序能启动、真实 QQ 业务可用、已有下载附件，是四个不同结论。** v0.1.0 公开附件仅 Linux x86_64；main 的 Windows/arm64 CI 通过不会给旧 Release 自动增加附件。
+下载前先核对操作系统和 CPU 架构，再看下面证据。**源码能通过测试、目标程序能启动、真实 QQ 业务可用、已有下载附件，是四个不同结论。** v0.1.1 已公开 Linux x86_64、Linux aarch64 与 Windows x86_64 MSVC 附件；v0.1.0 历史附件仍仅 Linux x86_64。
 
 ## 这些缩写怎么读
 
@@ -24,7 +24,7 @@
 
 [run 42476673350](https://github.com/Eetherrr/TwinTail/actions/runs/42476673350) 对源码 `8c3d096a88cdf40d77d1c3ce99b3ce3bd934d800` 的四个任务全部通过：Linux x64（job128719468100）、Linux arm64（job128719467917）、Windows x64 MSVC（job128719468070）、WebUI（job128719468130）。该提交包含插件 README、彻底移除及 Windows 回归修复。Rust 任务包含格式、严格 Clippy、工作区测试、构建、文档与生成合同漂移检查；Linux 额外执行显式 CLI smoke 和状态工具测试，Web 执行单元/模拟浏览器与构建检查。这里只记录任务成功，不挪用旧运行的测试计数。
 
-Windows 原生通过不代表 Windows 真实 QQ/SnowLuma 业务、反向真实部署、浏览器 live 用例或 Windows 备份工具已验证。公开 Release 仍是 v0.1.0 的独立源码快照，不自动包含 main 新增功能。
+Windows 原生通过不代表 Windows 真实 QQ/SnowLuma 业务、反向真实部署、浏览器 live 用例或 Windows 备份工具已验证。公开 Release 是对应版本 tag 的独立源码快照，不自动包含之后 main 的新增功能。
 
 ## v0.1.0 发行时历史证据
 
@@ -46,4 +46,15 @@ Linux本地证据为开发机x64，真实SnowLuma验证客户端为WSL mirrored�
 
 ## 新发行自动化的状态
 
-v0.1.1 [发行运行 42577373476](https://github.com/Eetherrr/TwinTail/actions/runs/42577373476)，源码 `cf62e4381600a383d70fbba44b11811e75d5558f`：完整 Rust/WebUI 四任务、Linux x86_64（job129030719639）、Linux arm64（job129030719692）及 Windows MSVC（job129030719483）的原生 release 构建、宿主 `--version`/`--check`、归档校验均成功，汇总与草稿创建成功。最终回下载验证公开步骤失败并保留草稿；附件是否公开以下载页为准。没有新增真实 SnowLuma 或 Windows live 浏览器结论。详见[自动化发行](automation.md)。
+v0.1.1 [发行运行 42577373476](https://github.com/Eetherrr/TwinTail/actions/runs/42577373476)，源码 `cf62e4381600a383d70fbba44b11811e75d5558f`：完整 Rust/WebUI 四任务、Linux x86_64（job129030719639）、Linux arm64（job129030719692）及 Windows MSVC（job129030719483）的原生 release 构建、宿主 `--version`/`--check`、归档校验均成功，汇总与草稿创建成功。首次公开验证因草稿按 tag 查询返回错误而保留草稿；[恢复运行 42580369848](https://github.com/Eetherrr/TwinTail/actions/runs/42580369848) 已复核原始包并公开。该恢复运行末尾对公开元数据的比较仍报失败，不能将其整体记为绿色；独立匿名下载已确认 Release 为 public/latest，八附件服务端 SHA256、七项下载摘要及三个归档均校验通过。没有新增真实 SnowLuma 或 Windows live 浏览器结论。详见[自动化发行](automation.md)。
+
+
+v0.1.1 公开附件回下载记录（2026-11-09）：
+
+| 归档 | 大小（字节） | SHA256 |
+| --- | ---: | --- |
+| `twintail-0.1.1-linux-x86_64.tar.gz` | 7539703 | `0c02cab6d70b7ec86eab4ec4a6a297d828823ce116dbb0aba87776bcd907bc58` |
+| `twintail-0.1.1-linux-aarch64.tar.gz` | 7413169 | `dfd11a556a75ad52095457a704c0687cade338530b788c33d0b9ae0ac914b61e` |
+| `twintail-0.1.1-windows-x86_64.zip` | 6311804 | `297ecdb563294e9e8eebc8193e434e1681feb440a42a9ce7db398f65f643921d` |
+
+三份验证报告均保持 `runtime_verified: false`，不把归档结构校验写成真实 QQ 业务验证。另在 Linux x86_64 本机解包下载附件，目录再次 verify、宿主 `--version`（0.1.1）及 `--check` 均通过；未连接 QQ。

@@ -111,7 +111,7 @@ SnowLuma 独立部署，真实 QQ 和具体版本实测只按[专项矩阵](../c
 
 ## 发行、备份与历史验证证据
 
-项目采用 MIT，仓库带 LICENSE、第三方许可正文与再分发声明；`v0.1.0` 已公开发布，实际附件和摘要以 [GitHub Release](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.0) 为准。候选工具的 `public_release: false` 只描述候选生成，不表示仓库或既有 Release 未公开；候选生成本身不执行公开发行。新增 Release 自动化与既有发行是不同事项，尚未远端实跑的流程不写成通过。
+项目采用 MIT，仓库带 LICENSE、第三方许可正文与再分发声明；`v0.1.1` 已公开发布，实际附件和摘要以 [GitHub Release](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.1) 为准。候选工具的 `public_release: false` 只描述候选生成，不表示仓库或既有 Release 未公开；候选生成本身不执行公开发行。新增 Release 自动化与既有发行是不同事项，尚未远端实跑的流程不写成通过。
 
 项目 MIT 许可和第三方分发义务分别保留。摘要不是签名、来源认证、加密或敏感备份保护；依赖更新和备份工具的具体边界见[安全与依赖升级](../release/security-updates.md)及[发行入口](../release/README.md)。
 

@@ -333,11 +333,16 @@ def recover(api, tag, run_id, downloader=download_bundle):
                 "Post-publication public record mismatch; inspect remote state before retrying")
         validate_assets(public, sizes)
         public_snapshot = stable_record(public)
-        # GitHub legitimately replaces draft URLs and source-archive links on publication.
+        # Publishing replaces untagged draft download URLs with the version-tag URL.
+        # Download bytes and pre-PATCH snapshots were checked above; retain immutable
+        # asset identity/content metadata while permitting that documented URL change.
+        for record in (public_snapshot, snapshot):
+            for asset in record["assets"]:
+                asset.pop("browser_download_url", None)
         identity_fields = ("id", "node_id", "tag_name", "target_commitish", "name", "body",
                            "prerelease", "created_at", "assets")
-        require(all(public_snapshot.get(field) == snapshot.get(field) for field in identity_fields),
-                "Published record/assets unexpectedly changed; inspect remote state")
+        changed = [field for field in identity_fields if public_snapshot.get(field) != snapshot.get(field)]
+        require(not changed, "Published identity fields changed: " + ", ".join(changed) + "; inspect remote state")
         require(api.get("/releases/latest").get("id") == draft["id"], "Published release is not latest; inspect remote state")
         require(approved_tag(api, tag) == original_tag, "Post-publication remote tag changed; inspect remote state")
         return {"published": True, "tag": tag, "source": SOURCE, "original_run": str(run_id), "release_id": draft["id"], "assets": 8}
