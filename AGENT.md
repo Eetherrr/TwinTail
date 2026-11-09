@@ -4,7 +4,7 @@
 
 ## 项目现状与目标
 
-**P3 管理、配置与热重载已完成 Linux 本地验收**：Rust 2024 workspace 包含 protocol/core/host/SDK 和 echo/mock 示例，工具链与最低支持版本为 Rust 1.99.1。已有 wire 1.2、版本包管理、配置 Schema/CAS/秘密引用及 prepare/commit/abort、desired/applied、可查询持久操作、排他热重载与失败恢复。继续保留静态权限/依赖、直接子进程监管、有界事件/动作/服务路由和 BotRef。P4 OneBot 类型库和 SnowLuma 正向 Universal WS 适配器已完成 Linux 本地验收及指定真实部署范围验证；P5 WebUI 与独立管理插件已完成 Linux 本地验收。P6 已实现 loopback 反向 Universal WS、候选打包校验、冷备份恢复和插件契约/有界负载工具，Linux 候选证据见发行文档；反向真实 SnowLuma、split/HTTP 与 Windows/arm64 运行未验证。项目采用 MIT 许可证，GitHub 发行已获授权。范围见 [ADR 0007](docs/architecture/0007-p6-release-hardening.md)。Windows 运行仍待目标 CI。P0–P2 历史见 ADR 0001–0003，P3 契约见 ADR 0004，P4 契约见 [ADR 0005](docs/architecture/0005-p4-onebot-snowluma.md)，运行步骤和证据见[适配器指南](docs/plugin-api/adapters.md)与[真实兼容矩阵](docs/compatibility/snowluma.md)。
+**P3 管理、配置与热重载已完成 Linux 本地验收**：Rust 2024 workspace 包含 protocol/core/host/SDK 和 echo/mock 示例，工具链与最低支持版本为 Rust 1.99.1。已有 wire 1.2、版本包管理、配置 Schema/CAS/秘密引用及 prepare/commit/abort、desired/applied、可查询持久操作、排他热重载与失败恢复。继续保留静态权限/依赖、直接子进程监管、有界事件/动作/服务路由和 BotRef。P4 OneBot 类型库和 SnowLuma 正向 Universal WS 适配器已完成 Linux 本地验收及指定真实部署范围验证；P5 WebUI 与独立管理插件已完成 Linux 本地验收。P6 已实现 loopback 反向 Universal WS、候选打包校验、冷备份恢复和插件契约/有界负载工具，Linux 候选证据见发行文档；反向真实 SnowLuma 与 split/HTTP 未验证或未实现，具体见兼容矩阵。项目采用 MIT 许可证，v0.1.0 已公开发行。范围见 [ADR 0007](docs/architecture/0007-p6-release-hardening.md)。当前 main 的 Linux x64/arm64、Windows x64 MSVC 与 WebUI 已通过原生 CI（源码 8c3d096，run 42476673350）；这不扩大真实 SnowLuma 或发布附件范围，见 docs/release/platforms.md。P0–P2 历史见 ADR 0001–0003，P3 契约见 ADR 0004，P4 契约见 [ADR 0005](docs/architecture/0005-p4-onebot-snowluma.md)，运行步骤和证据见[适配器指南](docs/plugin-api/adapters.md)与[真实兼容矩阵](docs/compatibility/snowluma.md)。
 
 目标是 Rust QQ Bot 框架，首选 OneBot v11，首个接入实现为 SnowLuma；支持插件管理、配置、热重载、WebUI 与插件开发 API 文档。
 
@@ -42,6 +42,7 @@
 - P2 建立可运行 echo-plugin 和 quickstart；P4 补适配器作者指南与真实 SnowLuma 兼容矩阵；P5 补 Web API 与 UI 操作说明。每个阶段文档随功能交付，不推迟到最终发布。
 - 插件文档至少覆盖 manifest、版本协商、生命周期、事件/动作/服务、错误、权限、配置、持久化、热重载、迁移和调试。
 - 对外版本破坏性变化必须说明兼容范围、迁移路径与错误行为；不以注释替代用户可用的开发指南。
+- 文档网站直接构建 `docs/`，修改导航同步 `mkdocs.yml`；提交前运行 `python tools/docs/check.py`（先安装 `requirements-docs.txt`）。Pages 发布由独立工作流管理，不把静态文档站点与插件 WebUI 混淆。
 
 ## 验证与完成条件
 

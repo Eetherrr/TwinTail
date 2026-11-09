@@ -26,13 +26,13 @@ stdout 专用于帧；stderr 以固定4096字节缓冲持续读取并丢弃，�
 
 Unix DATA 由有效用户拥有且精确0700，management.sock为同用户socket且0600；双方检查peer UID。校验祖先所有者、可写权限及链接，拒绝不安全根；已有目录不自动chmod，既有socket不自动删除，崩溃残留须确认无宿主后手动清理。退出仅清理由当前服务创建且身份未变的端点。
 
-管理与插件管道独立，1 MiB帧、最多16连接、每连接一次请求、网络读写默认5秒；操作等待期限以代码为准，超时后先查询状态。Windows受限本机管理已实现并通过交叉编译/Clippy，运行待Windows CI，不据Unix结果宣称Windows访问控制通过。
+管理与插件管道独立，1 MiB帧、最多16连接、每连接一次请求、网络读写默认5秒；操作等待期限以代码为准，超时后先查询状态。Windows 受限本机管理已实现且原生 MSVC CI 已通过，具体范围见[平台矩阵](../release/platforms.md)；不据此推断跨用户攻击或所有访问控制情景已实测。
 
 ## 后续边界
 
 P3 提供离线 Schema 校验、配置 CAS/秘密引用和本地包/重载管理；禁止外部 Schema 引用，配置/锁使用私有权限和链接校验。P4 SnowLuma 正向 Universal WS 适配器已实现，P5 Web管理已完成Linux本地验收，采用下述认证、鉴权、CSRF/Origin和CSP边界，仅允许loopback。SnowLuma独立部署，真实QQ及具体版本验收结果以[兼容矩阵](../compatibility/snowluma.md)为准。
 
-Windows 管理命名管道为 token user SID 配置 protected DACL，拒绝远程连接，并双向核验对端进程 token SID；首次创建拒绝命名冲突。四项 Windows 专用测试已编译但尚未在 Windows 运行，跨用户拒绝也未实测。该控制不隔离同用户恶意插件。ACK/EOF 传输和取消关闭用于限制管道 flush 任务的生命周期。
+Windows 管理命名管道为 token user SID 配置 protected DACL，拒绝远程连接，并双向核验对端进程 token SID；首次创建拒绝命名冲突。Windows 原生测试任务已有通过证据，但跨用户拒绝仍未专项实测。该控制不隔离同用户恶意插件。ACK/EOF 传输和取消关闭用于限制管道 flush 任务的生命周期。
 
 P2 控制、响应和事件分队列；事件投递溢出只影响对应订阅者并返回 dropped 计数。注册、队列和在途转发有界，但内存上限不是完整进程资源隔离。已入队动作断连/超时为 unknown_outcome，禁止自动重试。SDK 回调必须协作式让出执行权，插件自己创建的任务仍由插件取消/回收。详见 [ADR 0003](0003-p2-sdk-routing.md)。
 
@@ -52,7 +52,7 @@ POST manage 桥接按具体管理操作要求 exact `management.read` 或 exact 
 
 ## P6候选与反向连接边界
 
-当前候选只在本地构建验证，不外发、不执行public publish。项目无license/license-file与许可正文，权利人许可决策是外发gate；摘要/第三方依赖许可汇总不代替项目授权。相关策略见[安全与依赖升级](../release/security-updates.md)。
+项目已获 MIT 公开发行授权，仓库含 LICENSE、第三方许可正文与再分发声明，v0.1.0 已公开发布；实际附件与校验摘要以 [GitHub Release](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.0) 为准。候选打包工具仍只生成、验证候选，不自动执行公开发布；候选工具的 `public_release: false` 不代表仓库或既有 Release 尚未公开。摘要不等于签名或来源认证，第三方依赖许可与项目 MIT 许可分别保留。相关策略见[安全与依赖升级](../release/security-updates.md)。
 
 reverse_ws只绑定数字loopback，默认127.0.0.1:17281，非loopback即使配置token也拒绝。精确路径默认/onebot/v11，不接受query；要求精确单X-Self-ID匹配配置账号与单X-Client-Role: Universal。可选token存在时只接受精确单Authorization: Bearer TOKEN，重复头不能绕过认证。仅一条活动socket，额外连接拒绝，通常返回HTTP409；409为best-effort try_write后drop，避免恶意附加peer阻塞主连接，不保证所有网络下客户端都收到HTTP响应。token不匹配401，账号/role/path不匹配403；bind冲突InvalidConfig，stop需join释放监听。重连连接generation增长，在途断线/超时UnknownOutcome且不重放；错误不回显远端正文/token。无native TLS、split或HTTP，远端接入只通过外部SSH隧道映射loopback。
 

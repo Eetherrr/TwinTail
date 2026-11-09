@@ -1,0 +1,50 @@
+/* TwinTail: restrained navy, jade accents, system fonts; no remote font requests. */
+:root {
+  --md-text-font: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --md-code-font: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #142b43;
+  --md-primary-fg-color--light: #24455e;
+  --md-primary-fg-color--dark: #0b1c2e;
+  --md-accent-fg-color: #087f83;
+  --md-default-bg-color: #fafcfd;
+  --md-typeset-a-color: #08787d;
+  --tt-hero-glow: #d7f0ec;
+  --tt-card-border: #dce6ec;
+}
+[data-md-color-scheme="slate"] {
+  --md-hue: 213;
+  --md-primary-fg-color: #101f33;
+  --md-primary-fg-color--dark: #0b1728;
+  --md-default-bg-color: #101b2b;
+  --md-default-fg-color: #dee9f1;
+  --md-default-fg-color--light: #abbccc;
+  --md-accent-fg-color: #5bd4c5;
+  --md-typeset-a-color: #68dace;
+  --tt-hero-glow: #173a43;
+  --tt-card-border: #2a4054;
+}
+.md-header { box-shadow: 0 2px 12px #071b2920; }
+.md-tabs { border-bottom: 1px solid #ffffff12; }
+.md-typeset { line-height: 1.85; }
+.md-typeset h1, .md-typeset h2, .md-typeset h3 { font-weight: 650; letter-spacing: -.025em; }
+.md-typeset h1 { color: var(--md-default-fg-color); }
+.md-typeset a { text-underline-offset: .18em; }
+.tt-hero {
+  padding: 2.7rem 2rem 2.4rem;
+  margin: .6rem 0 1.7rem;
+  border: 1px solid var(--tt-card-border);
+  border-radius: 1.1rem;
+  background: radial-gradient(ellipse at 100% 0, var(--tt-hero-glow), transparent 75%);
+}
+.tt-eyebrow { color: var(--md-typeset-a-color); font-size: .66rem; letter-spacing: .16em; font-weight: 750; }
+.tt-hero h1 { margin: .6rem 0 1rem; font-size: clamp(1.8rem, 4vw, 2.6rem); line-height: 1.35; }
+.tt-hero p { max-width: 36rem; }
+.tt-hero .md-button { margin: .45rem .4rem 0 0; border-radius: .45rem; }
+.md-typeset .md-button--primary { background: var(--md-typeset-a-color); border-color: var(--md-typeset-a-color); color: var(--md-default-bg-color); }
+.md-typeset .grid.cards > ul > li { border-color: var(--tt-card-border); border-radius: .7rem; padding: 1.15rem; transition: border-color .15s ease; }
+.md-typeset .grid.cards > ul > li:hover { border-color: var(--md-accent-fg-color); box-shadow: none; }
+.md-typeset table:not([class]) { border-radius: .4rem; }
+@media (max-width: 600px) { .tt-hero { padding: 1.6rem 1.1rem; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }

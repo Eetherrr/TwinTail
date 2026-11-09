@@ -1,6 +1,14 @@
 # 平台验证矩阵
 
-当前GitHub native CI已通过：[run40901049665](https://github.com/Eetherrr/TwinTail/actions/runs/40901049665)，源码head `ad3296b09790e3ea497aac39b41957b66aabf3cd`。以下是本次运行范围，P0–P6历史本地证据仍见兼容记录；CI通过不扩大真实SnowLuma验证或发行附件范围。
+## 最新源码回归（2026-11-08）
+
+[run 42476673350](https://github.com/Eetherrr/TwinTail/actions/runs/42476673350) 对源码 `8c3d096a88cdf40d77d1c3ce99b3ce3bd934d800` 的四个任务全部通过：Linux x64（job128719468100）、Linux arm64（job128719467917）、Windows x64 MSVC（job128719468070）、WebUI（job128719468130）。该提交包含插件 README、彻底移除及 Windows 回归修复。Rust 任务包含格式、严格 Clippy、工作区测试、构建、文档与生成合同漂移检查；Linux 额外执行显式 CLI smoke 和状态工具测试，Web 执行单元/模拟浏览器与构建检查。这里只记录任务成功，不挪用旧运行的测试计数。
+
+Windows 原生通过不代表 Windows 真实 QQ/SnowLuma 业务、反向真实部署、浏览器 live 用例或 Windows 备份工具已验证。公开 Release 仍是 v0.1.0 的独立源码快照，不自动包含 main 新增功能。
+
+## v0.1.0 发行时历史证据
+
+发行时GitHub native CI已通过：[run40901049665](https://github.com/Eetherrr/TwinTail/actions/runs/40901049665)，源码head `ad3296b09790e3ea497aac39b41957b66aabf3cd`。以下是本次运行范围，P0–P6历史本地证据仍见兼容记录；CI通过不扩大真实SnowLuma验证或发行附件范围。
 
 | 目标 | 本次native执行证据 | 限制 |
 | --- | --- | --- |

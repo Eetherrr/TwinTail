@@ -1,6 +1,6 @@
 # TwinTail
 
-[GitHub](https://github.com/Eetherrr/TwinTail) · [Releases](https://github.com/Eetherrr/TwinTail/releases) · [MIT](LICENSE)
+[文档网站](https://eetherrr.github.io/TwinTail/) · [GitHub](https://github.com/Eetherrr/TwinTail) · [Releases](https://github.com/Eetherrr/TwinTail/releases) · [MIT](LICENSE)
 
 以 Rust 为核心、采用 OneBot v11 的 QQ Bot 框架。目标是以插件提供协议接入、业务功能与 WebUI；首个适配器通过 Universal WebSocket 连接独立部署的 SnowLuma。
 

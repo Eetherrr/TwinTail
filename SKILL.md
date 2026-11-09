@@ -1,6 +1,6 @@
 # TwinTail 项目设计与开发技能
 
-> 状态：**P3 管理、配置与热重载已完成 Linux 本地验收**。已有 protocol/core/host/SDK、wire 1.2、本地包管理、配置事务与秘密引用、desired/applied、操作记录及 exclusive 替换/失败恢复；P2 BotRef、事件/动作/服务与 echo/mock 示例保留。P4 OneBot 类型库与 SnowLuma 正向 Universal WS 适配器已完成 Linux 本地验收及指定真实部署范围验证；Windows 运行仍待目标 runner，P5 WebUI 与独立管理插件已完成 Linux 本地验收；P6 已实现反向 Universal WS、候选发行、冷备份恢复和契约/有界负载工具；Linux 本地候选证据见发行文档，项目采用 MIT 许可证，设计见 [ADR 0007](docs/architecture/0007-p6-release-hardening.md)。当前接入实现见 [ADR 0005](docs/architecture/0005-p4-onebot-snowluma.md)与[适配器指南](docs/plugin-api/adapters.md)，真实证据见 [SnowLuma 兼容矩阵](docs/compatibility/snowluma.md)。
+> 状态：**P3 管理、配置与热重载已完成 Linux 本地验收**。已有 protocol/core/host/SDK、wire 1.2、本地包管理、配置事务与秘密引用、desired/applied、操作记录及 exclusive 替换/失败恢复；P2 BotRef、事件/动作/服务与 echo/mock 示例保留。P4 OneBot 类型库与 SnowLuma 正向 Universal WS 适配器已完成 Linux 本地验收及指定真实部署范围验证；Linux x64/arm64、Windows x64 MSVC 与 WebUI 已有原生 CI 通过证据（8c3d096 / run 42476673350，见平台矩阵），不代表真实 QQ 或所有平台专项验收；P5 WebUI 与独立管理插件已完成 Linux 本地验收；P6 已实现反向 Universal WS、候选发行、冷备份恢复和契约/有界负载工具；Linux 本地候选证据见发行文档，项目采用 MIT 许可证，设计见 [ADR 0007](docs/architecture/0007-p6-release-hardening.md)。当前接入实现见 [ADR 0005](docs/architecture/0005-p4-onebot-snowluma.md)与[适配器指南](docs/plugin-api/adapters.md)，真实证据见 [SnowLuma 兼容矩阵](docs/compatibility/snowluma.md)。
 > 适用范围：TwinTail 的架构评审、功能实现、插件开发、测试与发布。执行约定见 [AGENT.md](AGENT.md)，所有项目改动同步记录到 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 1. 目标与边界
@@ -164,7 +164,7 @@ WebUI MVP 页面：登录、运行概览、插件列表和详情、启停/重载
 
 P4 MVP 仅支持正向 Universal WebSocket：TwinTail 适配器作为客户端连接 SnowLuma 的 OneBot WS 服务，复用单连接接收事件和动作响应。地址、路径和 token 由配置提供，不硬编码外部产品默认端口。处理鉴权失败、heartbeat/lifecycle、连接断开、指数退避重连和优雅停止；WS ping/pong 与 OneBot heartbeat 分开处理。
 
-后续实现反向 Universal WebSocket：SnowLuma 主动连接适配器监听地址，校验 Authorization、`X-Self-ID` 和 `X-Client-Role`，限制账号与连接角色。反向监听也属于适配器插件，不放入宿主。split API/Event 连接明确延期；HTTP API + HTTP 上报另列后续阶段，不以“完整支持 v11”掩盖传输范围。
+P6 已实现 loopback 反向 Universal WebSocket（真实 SnowLuma 反向部署尚未验证）：SnowLuma 主动连接适配器监听地址，校验 Authorization、`X-Self-ID` 和 `X-Client-Role`，限制账号与连接角色。反向监听也属于适配器插件，不放入宿主。split API/Event 连接明确延期；HTTP API + HTTP 上报另列后续阶段，不以“完整支持 v11”掩盖传输范围。
 
 2026-10-29 公开元数据核对到 SnowLuma v2.2.1 发布与 main HEAD，二者未被证明对应同一提交；具体来源见兼容矩阵。P4 已完成 Linux 本地验收及指定真实部署范围验证：Linux x64 WSL mirrored 客户端对 SnowLuma 2.2.1-node 完成查询/账号匹配、单次私聊与真实断线重连后的 Supervisor/独立插件业务闭环，用户确认收件。远端 OS/commit/SHA未知，notice/request、群聊、其他动作、Bearer/TLS及部署OS矩阵仍待测，不能据此宣称所有动作兼容。实施时固定测试版本/提交，保存脱敏事件样例与能力矩阵，记录标准接口、扩展、缺失字段和重连行为。SDK 不绑定未经验证的 SnowLuma 私有管理端点。
 
@@ -197,7 +197,7 @@ P1 已提供 [协议、清单、生命周期、权限、错误与排障指南](d
 | P5 WebUI（已完成 Linux 本地验收） | web-admin 插件、认证、插件与配置管理页、日志与连接诊断、OpenAPI、完整 CLI 救援路径 | 浏览器完成启停/重载/配置更新；并发更新冲突提示；CSRF/越权被拒绝；自身端口/配置重载失败可通过 CLI 恢复 |
 | P6 发布加固 | 反向 WS、依赖升级/配置迁移、平台打包、负载与故障测试、安全说明、用户与插件文档定版 | Linux x64/arm64 与 Windows x64 明确验证矩阵；持续运行与队列资源上限可复现；版本/文档/CHANGELOG 对齐，先交付可校验 0.1 MVP 本地候选；公开 GitHub 发行已获授权，采用 MIT |
 
-首次对外发布目标为 0.1 MVP；当前 Cargo 的 0.1.0 为工程及本地候选版本，不代表已公开发布或未测试平台已获认证。P6 后再评估 WASM、签名市场、持久化事件、HTTP 传输和多宿主部署。
+首次对外发布目标为 0.1 MVP；Cargo 当前版本为 0.1.0，v0.1.0 已公开发行；main 后续新增功能以 Unreleased 记录为准，不表示已经进入该 Release 附件，也不表示未测试平台已获认证。P6 后再评估 WASM、签名市场、持久化事件、HTTP 传输和多宿主部署。
 
 项目实施入口：[README](README.md)、[架构索引](docs/architecture/README.md)、[安全边界](docs/architecture/security.md)、[兼容性记录](docs/compatibility/README.md)。实际 workspace 已有 `twintail-protocol`、`twintail-core`、`twintail-host`、`twintail-plugin-sdk`、`twintail-onebot11`、`adapters/adapter-snowluma` 及两个示例；源码路径为 `crates/twintail-*`。当前已有 list/status/start/stop/call、P3 包管理/配置事务/热重载及 P4 独立适配器；P5 已添加 `plugins/web-admin`、`web/` 和管理桥接，见 [ADR 0006](docs/architecture/0006-p5-web-admin.md)。缺失 host.toml 表示空计划。
 

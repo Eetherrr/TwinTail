@@ -1,6 +1,6 @@
 # 插件 SDK 与协议指南
 
-P2 已完成 Linux 本地验收：Rust SDK 封装握手、生命周期、有界通信、事件订阅、动作与版本化服务调用；echo 与 mock-adapter 是可运行的正式 SDK 示例。P1 独立协议 fixture 继续用于故障注入。P3 配置事务、本地包管理和排他热重载已完成 Linux 本地验收；P4 OneBot 类型库和 SnowLuma 正向 Universal WS 适配器已完成 Linux 本地验收及指定真实部署范围验证；reverse/split/HTTP 延期。P5 Web 管理已完成 Linux 本地验收，覆盖桌面/手机真实Chromium交互及CLI救援；Windows运行仍待验证。Cargo `0.1.0` 不代表稳定 SDK 已发布。
+P2 已完成 Linux 本地验收：Rust SDK 封装握手、生命周期、有界通信、事件订阅、动作与版本化服务调用；echo 与 mock-adapter 是可运行的正式 SDK 示例。P1 独立协议 fixture 继续用于故障注入。P3 配置事务、本地包管理和排他热重载已完成 Linux 本地验收；P4 OneBot 类型库和 SnowLuma 正向 Universal WS 适配器已完成 Linux 本地验收及指定真实部署范围验证；P6 已实现 loopback 反向 Universal WS（本地 mock 与子进程测试），真实 SnowLuma 反向部署未验证，split/HTTP 延期。P5 Web 管理已完成 Linux 本地验收，覆盖桌面/手机真实Chromium交互及CLI救援；当前 Windows MSVC 原生 CI 范围见[平台矩阵](../release/platforms.md)，不包括 Windows live 浏览器专项。Cargo `0.1.0` 不代表 SDK 已达到稳定 API 承诺。
 
 | 指南 | 内容 |
 | --- | --- |

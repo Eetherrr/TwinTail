@@ -2,7 +2,7 @@
 
 P2 SDK、路由与示例已完成 Linux 本地验收。下面从仓库源码构建，在全新的目录内组装只含清单和可执行文件的包，并通过宿主本机管理接口演示 mock 事件 → echo → mock 动作。这里不需要 QQ 账号；配置事务和热重载属于 P3，真实 QQ/SnowLuma 属于 P4。
 
-2026-10-29 Linux 本地已按本页包结构完成独立 release 构建、两包离线校验、CLI 注入与查询、顺序停用：mock.emit 返回 delivered=1/dropped=0，mock.actions 记录一条携带相同消息段的 send_msg，宿主正常退出。此项验证仅覆盖本页演示，完整 P2 检查见[兼容性记录](../compatibility/README.md)；Windows 运行仍待验证。
+2026-10-29 Linux 本地已按本页包结构完成独立 release 构建、两包离线校验、CLI 注入与查询、顺序停用：mock.emit 返回 delivered=1/dropped=0，mock.actions 记录一条携带相同消息段的 send_msg，宿主正常退出。此项验证仅覆盖本页演示，完整 P2 检查见[兼容性记录](../compatibility/README.md)；这是当时的 Linux 专项记录，当前原生 CI 范围见[平台矩阵](../release/platforms.md)。
 
 使用仓库固定的 Rust 1.99.1 工具链与 Cargo.lock。SDK、protocol、core、host 和两个示例的 Cargo 包版本目前均为 0.1.0；它们不是 wire 版本。wire 为 1.2，清单 `protocol_version = 1` 表示主版本，`host_api = "^0.1.0"` 表示宿主 API 兼容范围。当前 SDK 接受 wire 1.1 或兼容的更高 minor，低于 1.1 会拒绝初始化；配置及应用启动确认扩展要求双方支持 1.2。SDK 通过版本化 JSON IPC 工作，不依赖 Rust 跨进程 ABI。必须授予的 P2 能力也参与握手校验，不能仅凭 wire major 相同推断旧宿主支持路由。
 
@@ -76,11 +76,11 @@ CLI 以当前 OS 用户经独立本机管理通道调用插件自定义 request�
 "$DEMO/bin/twintail-host" plugins stop mock-adapter --data-dir "$DEMO/data"
 ```
 
-停止被活动 echo 依赖的 mock 会得到 conflict。P2 没有通用 install、配置更新事务或 reload 命令；重新启用包可使用 plugins start，重新启动后 BotRef 属于新 generation，不复用旧实例路由。
+停止被活动 echo 依赖的 mock 会得到 conflict。本教程刻意使用 P2 的静态打包路径；当前版本的安装、配置事务与重载分别见[存储](storage.md)、[配置](configuration.md)与[热重载](hot-reload.md)。已启用但停止的实例可使用 plugins start，重新启动后 BotRef 属于新 generation，不复用旧实例路由。
 
-Windows 构建产物包含 `.exe`。在 PowerShell 的新目录构建与复制时，对三个 bin 使用 `twintail-host.exe`、`echo-plugin.exe`、`mock-adapter.exe`；两个包内 plugin.toml 的 entrypoint 也分别改为 `echo-plugin.exe`、`mock-adapter.exe`。插件 id、包目录名与 capabilities 保持示例原值。使用 `New-Item -ItemType Directory` 创建目录、`Copy-Item` 复制文件，以 `& "$demo\bin\twintail-host.exe" ...` 调用。设置与 Unix 示例等价的 host.toml 后，先 --validate，再前台启动；管理使用宿主实现的本机命名管道，不创建 management.sock。JSON 仍必须作为单参数；PowerShell 可用 `'{"message":[{"type":"text","data":{"text":"hello"}}]}'`，并按所用 PowerShell 版本的原生命令参数规则传递。Windows 运行验收仍须目标环境完成。
+Windows 构建产物包含 `.exe`。在 PowerShell 的新目录构建与复制时，对三个 bin 使用 `twintail-host.exe`、`echo-plugin.exe`、`mock-adapter.exe`；两个包内 plugin.toml 的 entrypoint 也分别改为 `echo-plugin.exe`、`mock-adapter.exe`。插件 id、包目录名与 capabilities 保持示例原值。使用 `New-Item -ItemType Directory` 创建目录、`Copy-Item` 复制文件，以 `& "$demo\bin\twintail-host.exe" ...` 调用。设置与 Unix 示例等价的 host.toml 后，先 --validate，再前台启动；管理使用宿主实现的本机命名管道，不创建 management.sock。JSON 仍必须作为单参数；PowerShell 可用 `'{"message":[{"type":"text","data":{"text":"hello"}}]}'`，并按所用 PowerShell 版本的原生命令参数规则传递。Windows 原生 CI 已通过，范围见[平台矩阵](../release/platforms.md)；本页 PowerShell 手工流程与真实 QQ 不因此被认定已专项验收。
 
-编写自己的插件时实现 SDK 的 `Plugin` trait，并调用 `run_stdio(plugin, Hello { ... })`。Hello 的 plugin_id、version、required_capabilities 须与清单一致；`Plugin::start` 在宿主 activate 后注册机器人/服务或订阅，`event`、`action`、`service` 分别处理三类业务。Context 提供宿主初始化身份、grants、data_dir 和取消状态；当前 config_revision 为基线字段，不代表 P3 配置 API 已实现。
+编写自己的插件时实现 SDK 的 `Plugin` trait，并调用 `run_stdio(plugin, Hello { ... })`。Hello 的 plugin_id、version、required_capabilities 须与清单一致；`Plugin::start` 在宿主 activate 后注册机器人/服务或订阅，`event`、`action`、`service` 分别处理三类业务。Context 提供宿主初始化身份、grants、data_dir、取消状态以及 `config()` 配置快照。当前版本已实现 P3 配置事务、desired/applied 修订与 prepare/commit/abort 回调，具体约定见[配置指南](configuration.md)；本页示例不演示配置更新。
 
 SDK 保持读循环与 handler 分离，handler 可以 await Context 调用；start 完成后才调度本插件的业务回调。因此 start 可以调用宿主注册/订阅，但不能等待依赖本插件 action/service/request/event 回调才能完成的调用链，包括经其他插件回到自身的初始化循环。队列、pending 和并发有界。业务自己创建的 tokio::spawn 任务须保留所有权，通过 Context::cancelled 配合停止并在 stop 中 join，SDK 不追踪任意脱离的任务。详见 SDK rustdoc 和 [echo 源码](../../examples/echo-plugin/src/main.rs)。
 

@@ -2,7 +2,11 @@
 
 本页区分选定的支持目标、尚未执行的检查与已取得的证据。历史 P0 决策见 [ADR 0001](../architecture/0001-p0-baseline.md)，安全限制见[安全边界](../architecture/security.md)，阶段范围见 [SKILL.md](../../SKILL.md)。配置 CI、通过 mock 或外部项目声明均不等于真实平台或 SnowLuma 兼容验证。
 
-## GitHub 0.1.0发行原生CI记录
+## 当前源码验证入口
+
+2026-11-08 源码 `8c3d096` 的 Linux x64、Linux arm64、Windows MSVC 与 WebUI 四项任务全部通过，见[run 42476673350](https://github.com/Eetherrr/TwinTail/actions/runs/42476673350)及[平台矩阵](../release/platforms.md)。下文按日期/阶段保留历史计数，不作为当前提交测试数量。v0.1.0 已公开发行，其附件快照不自动包含 main 后续功能。
+
+## GitHub 0.1.0发行时原生CI历史记录
 
 源码已以MIT公开推送main；v0.1.0 Release由[发行页面](https://github.com/Eetherrr/TwinTail/releases/tag/v0.1.0)实际状态确认，不将draft写成已正式发布。发行附件仅Linux x86_64。本次全绿[run40901049665](https://github.com/Eetherrr/TwinTail/actions/runs/40901049665)对应head `ad3296b09790e3ea497aac39b41957b66aabf3cd`，以下记录独立于P0–P6历史：
 
@@ -14,7 +18,7 @@
 
 ## P6发布加固（Linux本地候选）
 
-用户已授权新建公开GitHub仓库、main分支及MIT下0.1.0发行准备；根许可与元数据由lead同步。本页不将授权写成公开推送或Release已完成，实际发行证据另行记录。发行/状态/合同与soak命令已落盘，见发行指南；最终验证计数不沿用P5历史。状态负责人报告Python3.13.5下16项stdlib unittest、py_compile及真实CLI snapshot/verify/restore/重复restore拒绝通过；最低Python3.11本机未运行，CI等待runner。
+本节保留公开发行前的 P6 本地验收记录；当时公开推送与许可同步尚在准备中。当前 MIT、公开源码及 Release 状态见上文，不将当时待办视为当前状态。发行/状态/合同与soak命令已落盘，见发行指南；最终验证计数不沿用P5历史。状态负责人报告Python3.13.5下16项stdlib unittest、py_compile及真实CLI snapshot/verify/restore/重复restore拒绝通过；最低Python3.11本机未运行，CI等待runner。
 
 P6 Linux本地候选源码与工具验收完成：最终fmt、workspace全目标strict Clippy（-D warnings）和workspace测试通过；清单177项含2项ignored CLI，默认实际执行174项测试+1项doctest。严格rustdoc及protocol/manifest/OpenAPI漂移检查通过。反向测试固定bind失败曾表现为PluginExited/pipeclosed/statefailed，故意占端口已精确复现；原测试reserve端口0后释放、先启动echo，存在并发正向出站连接夺取ephemeral端口的TOCTOU窗口，未捕获原OS占用者，不能声称原始占用实测。仅测试改为p4四项共享async锁、reservation保持到adapter启动前；外部OS竞争窗口缩小但不是原子保留。生产代码未变，适配器19项测试及最终workspace回归通过。既有P4真实SnowLuma范围保持不变，reverse尚无真实SnowLuma证据。
 
