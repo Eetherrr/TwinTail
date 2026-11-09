@@ -27,7 +27,20 @@ jobs:
         with:
           python-version: '3.11'
       - name: Release tooling tests
-        run: python -m unittest discover -s tools/release -p "test_*.py"
+        shell: python
+        run: |
+          import os
+          import subprocess
+          import sys
+          result = subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tools/release', '-p', 'test_*.py'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
+          print(result.stdout, end='')
+          if result.returncode:
+              detail = result.stdout[-20000:]
+              escaped = detail.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print(f'::error title=Release tooling test failure::{escaped}')
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+                  summary.write('## Release tooling diagnostics\n\n```text\n' + detail + '\n```\n')
+          sys.exit(result.returncode)
       - name: Cold state tooling tests
         if: runner.os == 'Linux'
         run: python -m unittest discover -s tools/state -p "test_*.py"

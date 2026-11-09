@@ -294,7 +294,12 @@ class RecoveryTests(unittest.TestCase):
                     else:
                         path = directory / "release-notes.md"
                         path.unlink()
-                        path.symlink_to(directory / "SHA256SUMS")
+                        try:
+                            path.symlink_to(directory / "SHA256SUMS")
+                        except OSError as error:
+                            if os.name == "nt" and getattr(error, "winerror", None) == 1314:
+                                raise unittest.SkipTest("symlink fixture requires Windows creation privilege") from error
+                            raise
                 with contextlib.redirect_stdout(self.output), self.assertRaises((recover.RecoveryError, release.ReleaseError)):
                     recover.recover(self.api, recover.TAG, recover.ORIGINAL_RUN, wrong_download)
                 self.assertEqual(self.api.mutations, [])
@@ -439,9 +444,10 @@ class TransportTests(unittest.TestCase):
 
     def test_gh_download_uses_original_run_only_and_captures_output(self):
         completed = Mock(returncode=0, stderr="")
+        destination = Path(tempfile.gettempdir()) / "review"
         with patch.object(recover.subprocess, "run", return_value=completed) as run:
-            recover.download_bundle(self.api, recover.ORIGINAL_RUN, Path("/tmp/review"))
-        self.assertEqual(run.call_args.args[0], ["gh", "run", "download", recover.ORIGINAL_RUN, "--repo", self.api.repo, "-n", "release-review-bundle", "-D", "/tmp/review"])
+            recover.download_bundle(self.api, recover.ORIGINAL_RUN, destination)
+        self.assertEqual(run.call_args.args[0], ["gh", "run", "download", recover.ORIGINAL_RUN, "--repo", self.api.repo, "-n", "release-review-bundle", "-D", str(destination)])
         self.assertTrue(run.call_args.kwargs["capture_output"])
         self.assertEqual(run.call_args.kwargs["timeout"], 300)
 
