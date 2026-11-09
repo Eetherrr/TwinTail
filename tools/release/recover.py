@@ -85,7 +85,8 @@ class API:
         try:
             return self.opener.open(request, timeout=60)
         except urllib.error.HTTPError as error:
-            if method == "GET" and accept == "application/octet-stream" and error.code in (301, 302, 303, 307, 308):
+            is_download = accept == "application/octet-stream" or re.fullmatch(r"/actions/jobs/[0-9]+/logs", path) is not None
+            if method == "GET" and is_download and error.code in (301, 302, 303, 307, 308):
                 location = error.headers.get("Location", "")
                 error.close()
                 # Never forward the API Authorization header to a signed asset/log URL.
@@ -119,7 +120,8 @@ class API:
         return json.loads(data)
 
     def binary(self, path, limit, destination=None):
-        with self._open(path, "application/octet-stream") as response:
+        accept = "application/vnd.github+json" if re.fullmatch(r"/actions/jobs/[0-9]+/logs", path) else "application/octet-stream"
+        with self._open(path, accept) as response:
             if destination is None:
                 data = response.read(limit + 1)
                 require(len(data) <= limit, "Log download exceeds limit")

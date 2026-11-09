@@ -87,7 +87,7 @@ Actions artifacts 保留 14 天。tag 运行将汇总文件上传到新建 Relea
 
 首次公开验证失败后，`.github/workflows/release-recovery.yml` 提供独立恢复，不重新执行打包、不重新上传、不创建或删除 Release，也不移动版本 tag。它只接受已经批准的 `v0.1.1` 与源码 `cf62e4381600a383d70fbba44b11811e75d5558f`，默认原始运行是 `42577373476`，不是恢复运行自己的 ID。
 
-维护者可在 Actions → Recover approved existing release draft 输入上述 tag 与原始 run；推送单独的 `release-recover-v0.1.1` tag 也可触发恢复代码。恢复 tag 指向包含修复的维护提交，版本 tag 仍指向原发行源码。恢复会读取并脱敏输出原失败 job 日志，核对原运行中四个完整检查、三个原生包、汇总及草稿创建全部成功，且唯一失败位于公开验证步骤；下载原运行的 `release-review-bundle`，重新验证三个归档、报告及七项摘要，再下载现有草稿的八个附件逐字节比较。再次核对批准 tag、草稿身份和附件未变后，唯一远端修改是按草稿 ID 公开并设为 latest。
+维护者可在 Actions → Recover approved existing release draft 输入上述 tag 与原始 run；推送单独的 `release-recover-v0.1.1` tag 也可触发恢复代码；重复尝试使用新标签（如 `release-recover-v0.1.1-attempt2`），不移动旧标签，恢复目标始终固定为 v0.1.1。恢复 tag 指向包含修复的维护提交，版本 tag 仍指向原发行源码。恢复会读取并脱敏输出原失败 job 日志，核对原运行中四个完整检查、三个原生包、汇总及草稿创建全部成功，且唯一失败位于公开验证步骤；下载原运行的 `release-review-bundle`，重新验证三个归档、报告及七项摘要，再下载现有草稿的八个附件逐字节比较。再次核对批准 tag、草稿身份和附件未变后，唯一远端修改是按草稿 ID 公开并设为 latest。
 
 任何检查不符都会停止；公开请求发生网络异常时不自动重试，应先查看远端状态。此入口是本次固定版本的恢复工具，不是绕过完整发行流程的通用发布入口。
 

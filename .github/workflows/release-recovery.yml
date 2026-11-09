@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$RECOVERY_EVENT" = push ]; then
-            tag="${RECOVERY_REF#release-recover-}"
+            tag=v0.1.1
             original_run=42577373476
           else
             tag="$INPUT_TAG"

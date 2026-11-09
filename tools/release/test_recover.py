@@ -353,6 +353,18 @@ class TransportTests(unittest.TestCase):
         self.assertIsNone(second.get_header("Accept"))
         self.assertEqual(first.full_url, self.api.base + "/releases/assets/1")
 
+    def test_job_logs_request_json_media_then_follow_without_auth(self):
+        self.api.opener = Mock()
+        self.api.opener.open.side_effect = [
+            urllib.error.HTTPError("original", 302, "Found", {"Location": "https://logs.example/log?sig=secret"}, None),
+            io.BytesIO(b"original failure")]
+        self.assertEqual(self.api.binary("/actions/jobs/129031731232/logs", 100), b"original failure")
+        first, second = [call.args[0] for call in self.api.opener.open.call_args_list]
+        self.assertEqual(first.get_header("Accept"), "application/vnd.github+json")
+        self.assertEqual(first.get_header("Authorization"), "Bearer ghp_SYNTHETIC_SECRET")
+        self.assertIsNone(second.get_header("Authorization"))
+        self.assertIsNone(second.get_header("Accept"))
+
     def test_https_and_no_url_credentials_required_on_redirect(self):
         for url in ("http://example.com/asset", "https://user:password@example.com/asset", "file:///etc/passwd"):
             with self.subTest(url=url):
