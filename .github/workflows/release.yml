@@ -240,18 +240,33 @@ jobs:
               require(all(path.is_file() and not path.is_symlink() for path in entries), 'Unexpected non-regular release asset.')
               return {path.name for path in entries}
           require(files(local) == expected, 'Review bundle does not contain exactly the eight expected assets.')
-          release_path = '/releases/tags/' + quote(tag_name, safe='')
+          def find_release():
+              # Draft discovery must use LIST. target_commitish is descriptive metadata,
+              # not the current commit behind an existing tag; the remote tag is checked below.
+              matches = []
+              for page in range(1, 21):
+                  releases = get('/releases?per_page=100&page=' + str(page))
+                  matches.extend(release for release in releases if release['tag_name'] == tag_name)
+                  if len(releases) < 100:
+                      break
+              else:
+                  raise SystemExit('Release inventory exceeded the bounded lookup.')
+              require(len(matches) == 1, 'Expected exactly one release for the approved tag.')
+              return matches[0]
           def verify_draft():
-              release = get(release_path)
-              require(release['draft'] is True and release['tag_name'] == tag_name and release['target_commitish'] == source, 'Draft tag or target differs from tested source.')
+              release = find_release()
+              require(release['draft'] is True and release['tag_name'] == tag_name, 'Draft tag differs from approved tag.')
               assets = release['assets']
               require(len(assets) == len(expected) and {asset['name'] for asset in assets} == expected, 'Draft asset set differs from review bundle.')
               require(all(asset['state'] == 'uploaded' and asset['size'] == (local / asset['name']).stat().st_size for asset in assets), 'Draft asset upload incomplete or size mismatch.')
-              return release['id']
-          release_id = verify_draft()
+              return release
+          draft = verify_draft()
+          release_id = draft['id']
           with tempfile.TemporaryDirectory(prefix='twintail-release-') as temporary:
               downloaded = pathlib.Path(temporary)
-              subprocess.run(['gh', 'release', 'download', tag_name, '--dir', temporary], check=True)
+              for asset in draft['assets']:
+                  with (downloaded / asset['name']).open('xb') as output:
+                      subprocess.run(['gh', 'api', 'repos/' + os.environ['GH_REPO'] + '/releases/assets/' + str(asset['id']), '-H', 'Accept: application/octet-stream'], stdout=output, check=True)
               require(files(downloaded) == expected, 'Downloaded asset set differs from review bundle.')
               for name in expected:
                   require(filecmp.cmp(local / name, downloaded / name, shallow=False), 'Uploaded asset bytes differ: ' + name)
@@ -276,6 +291,6 @@ jobs:
                   require('TwinTail-Publish: approved' in annotation['message'].split('\n'), 'Top-level publication approval is no longer present.')
               obj = annotation['object']
           require(obj['type'] == 'commit' and obj['sha'] == source, 'Remote tag no longer matches the tested source commit.')
-          require(verify_draft() == release_id, 'Draft release identity changed during verification.')
-          subprocess.run(['gh', 'release', 'edit', tag_name, '--draft=false', '--latest'], check=True)
+          require(verify_draft()['id'] == release_id, 'Draft release identity changed during verification.')
+          subprocess.run(['gh', 'api', '--method', 'PATCH', 'repos/' + os.environ['GH_REPO'] + '/releases/' + str(release_id), '-F', 'draft=false', '-f', 'make_latest=true'], check=True)
           PY

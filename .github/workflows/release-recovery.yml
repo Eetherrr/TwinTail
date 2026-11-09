@@ -1,0 +1,60 @@
+name: Recover approved existing release draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Already-approved existing draft tag (bounded to v0.1.1)'
+        required: true
+        default: v0.1.1
+        type: string
+      run:
+        description: 'Original failed release.yml run, not this recovery run'
+        required: true
+        default: '42577373476'
+        type: string
+  push:
+    tags: ['release-recover-v*']
+
+permissions:
+  contents: write
+  actions: read
+
+# Serialize against the original version-tag publication; never cancel mid-PATCH.
+concurrency:
+  group: release-refs/tags/v0.1.1
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Verify existing draft and publish once
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout trusted recovery revision, not the original release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Recover original approved draft without changing tag or assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RECOVERY_EVENT: ${{ github.event_name }}
+          RECOVERY_REF: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_RUN: ${{ inputs.run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RECOVERY_EVENT" = push ]; then
+            tag="${RECOVERY_REF#release-recover-}"
+            original_run=42577373476
+          else
+            tag="$INPUT_TAG"
+            original_run="$INPUT_RUN"
+          fi
+          python tools/release/recover.py --tag "$tag" --run "$original_run"

@@ -37,6 +37,6 @@
 
 发行工具入口是 `python3 tools/release/release.py --help`，构建、整理文件、压缩和校验步骤见[构建与交付](plugins.md)。工具报告固定保留 `channel=candidate`、`public_release=false`、`runtime_verified=false`：这些字段描述打包工具自身的证据，不会因为另外公开了 Release 就自动改写为业务验证通过。
 
-新的 Release 自动化已实现，**尚未取得完整发行运行通过的记录**。手动入口仅构建并上传 review artifacts；tag 入口在检查完成后仅创建草稿，公开发布仍需人工审核。它不自动发布 Cargo registry，也不修改现有 v0.1.0。
+Release 自动化的 v0.1.1 首次运行已通过完整 CI、三平台原生打包、汇总和草稿创建；首次公开验证失败后保留草稿，恢复详情见[自动化发行](automation.md)。手动入口仅构建并上传 review artifacts；普通 tag 创建草稿，明确批准的附注 tag 才会在全部核验成功后公开。它不自动发布 Cargo registry，也不修改现有 v0.1.0。
 
 再分发制品应包含项目 MIT 许可与需要的第三方声明，并重新执行 stage/verify。Linux/Windows 原生 CI、浏览器测试和真实 QQ 连接分别记录，任何一项都不扩大其他项的结论；反向真实 SnowLuma 尚未验证。

@@ -1,6 +1,6 @@
 # 本地候选打包工具
 
-GitHub tag 触发的三平台构建与草稿流程见[自动化 Release](../../docs/release/automation.md)。默认轻量 tag 与普通附注 tag 仍只创建草稿；操作者可在新附注 tag 的最顶层消息加入精确独立行 `TwinTail-Publish: approved`，显式选择在全部验证成功后公开并设为 latest。工作流先创建草稿，确认目标为受测提交，核对精确八个附件，再下载并与 `release-output` 逐字节比较、校验 SHA256；任何前置检查失败保留草稿，不覆盖现有 Release 或附件。嵌套内层 tag 消息和手动构建不构成批准。创建 tag 的示例与完整限制见上述指南。
+GitHub tag 触发的三平台构建与草稿流程见[自动化 Release](../../docs/release/automation.md)。默认轻量 tag 与普通附注 tag 仍只创建草稿；操作者可在新附注 tag 的最顶层消息加入精确独立行 `TwinTail-Publish: approved`，显式选择在全部验证成功后公开并设为 latest。工作流先创建草稿，通过 Release 列表定位并按数字 ID 下载附件，核对精确八个附件，再与 `release-output` 逐字节比较、校验 SHA256；提交身份以实际远端 tag 解析结果为准，不以 `target_commitish` 描述字段为准。任何前置检查失败保留草稿，不覆盖现有 Release 或附件。嵌套内层 tag 消息和手动构建不构成批准。创建 tag 的示例与完整限制见上述指南。
 
 本文件说明底层打包工具；工具本身仍不执行网络发布。`automation.py` 为工作流提供版本验证及三平台汇总，`collect --help` 可查看接口。汇总精确输出三个归档、三个 `TARGET-validation.json`、`SHA256SUMS`、`release-notes.md`；外部摘要覆盖其余七个文件，包含发行说明。
 

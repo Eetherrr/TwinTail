@@ -46,4 +46,4 @@ Linux本地证据为开发机x64，真实SnowLuma验证客户端为WSL mirrored�
 
 ## 新发行自动化的状态
 
-新增三平台 Release 自动化已实现，尚未取得完整发行运行通过的记录。上面的两次原生 CI 记录是既有源码回归，不证明新增的发行构建、汇总和草稿 job 已成功运行。详见[自动化发行](automation.md)。
+v0.1.1 [发行运行 42577373476](https://github.com/Eetherrr/TwinTail/actions/runs/42577373476)，源码 `cf62e4381600a383d70fbba44b11811e75d5558f`：完整 Rust/WebUI 四任务、Linux x86_64（job129030719639）、Linux arm64（job129030719692）及 Windows MSVC（job129030719483）的原生 release 构建、宿主 `--version`/`--check`、归档校验均成功，汇总与草稿创建成功。最终回下载验证公开步骤失败并保留草稿；附件是否公开以下载页为准。没有新增真实 SnowLuma 或 Windows live 浏览器结论。详见[自动化发行](automation.md)。
